@@ -871,13 +871,13 @@ static void refloat_thd(void *arg) {
 
             d->enable_upside_down = true;
 
-            // Wheelie exit: brake pressed on ADC2 -> apply forward braking and return to throttle
+            // Wheelie exit: brake pressed on ADC2 -> return to throttle mode.
+            // Seed throttle_current from balance_current so the motor output does not
+            // drop abruptly. The regen requested via ADC2 will then ramp in naturally
+            // through the IIR filter in STATE_THROTTLE.
             if (d->footpad.adc2 > 0.05f) {
-                motor_control_request_current(
-                    &d->motor_control, -d->float_conf.wheelie_exit_brake_current
-                );
                 state_throttle(&d->state);
-                d->throttle_current = 0;
+                d->throttle_current = d->balance_current;
                 break;
             }
 
@@ -1107,6 +1107,9 @@ static void refloat_thd(void *arg) {
                 engage(d);
                 // Set centering target to the wheelie balance point, not 0
                 d->setpoint_target = d->float_conf.wheelie_target_pitch;
+                // Bumpless transfer: seed balance_current from the live throttle current so
+                // the motor output does not drop to zero at the moment of handover.
+                d->balance_current = d->throttle_current;
             }
             break;
         }

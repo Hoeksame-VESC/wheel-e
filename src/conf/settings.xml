@@ -1582,24 +1582,6 @@ p, li { white-space: pre-wrap; }
             <suffix> A</suffix>
             <vTx>7</vTx>
         </throttle_brake_current_max>
-        <wheelie_exit_brake_current>
-            <longName>Wheelie Exit Brake Current</longName>
-            <type>1</type>
-            <transmittable>1</transmittable>
-            <description>Forward braking current (A) briefly applied when exiting wheelie mode via the brake input. Ensures the front wheel tips down reliably.</description>
-            <cDefine>CFG_DFLT_WHEELIE_EXIT_BRAKE_CURRENT</cDefine>
-            <editorDecimalsDouble>1</editorDecimalsDouble>
-            <editorScale>1</editorScale>
-            <editAsPercentage>0</editAsPercentage>
-            <maxDouble>50</maxDouble>
-            <minDouble>0</minDouble>
-            <showDisplay>0</showDisplay>
-            <stepDouble>1</stepDouble>
-            <valDouble>5</valDouble>
-            <vTxDoubleScale>10</vTxDoubleScale>
-            <suffix> A</suffix>
-            <vTx>7</vTx>
-        </wheelie_exit_brake_current>
         <startup_pitch_tolerance>
             <longName>Startup Pitch Axis Angle Tolerance</longName>
             <type>1</type>
@@ -4057,7 +4039,6 @@ p, li { white-space: pre-wrap; }
         <ser>wheelie_entry_threshold</ser>
         <ser>throttle_current_max</ser>
         <ser>throttle_brake_current_max</ser>
-        <ser>wheelie_exit_brake_current</ser>
         <ser>startup_pitch_tolerance</ser>
         <ser>startup_roll_tolerance</ser>
         <ser>startup_speed</ser>
@@ -4347,7 +4328,6 @@ p, li { white-space: pre-wrap; }
                     <param>::sep::Wheelie (Bike Mode)</param>
                     <param>wheelie_target_pitch</param>
                     <param>wheelie_entry_threshold</param>
-                    <param>wheelie_exit_brake_current</param>
                     <param>::sep::ADC Throttle (Bike Mode)</param>
                     <param>throttle_current_max</param>
                     <param>throttle_brake_current_max</param>

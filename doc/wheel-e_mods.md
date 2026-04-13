@@ -23,8 +23,8 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
 
 ### 3. Wheelie exit
 - Pressing the brake (ADC2 > 5%) while in wheelie mode:
-  1. Immediately applies a small forward braking current (`wheelie_exit_brake_current`) to ensure the nose tips down and the front wheel lands first
-  2. Returns to normal throttle mode (`STATE_THROTTLE`)
+  1. Returns to normal throttle mode (`STATE_THROTTLE`), seeding `throttle_current` from the live `balance_current` for a bumpless handover
+  2. The ADC2 regen current ramps in naturally via the IIR filter
 - Throttle (ADC1) is ignored in wheelie mode
 
 ### 4. Safety / rider presence
@@ -44,8 +44,12 @@ The onewheel and this rear-wheel-balance bike share the same physical problem: b
 ### Why `setpoint_target = wheelie_target_pitch` not 0 during running
 The original code sets `setpoint_target = 0` in the `SAT_NONE` (normal running) branch. For a bike balanced at ~20°, the PID would immediately try to pitch the bike back to level (0°). Changing the normal running target to `wheelie_target_pitch` means the balance loop holds the configured wheelie angle as its equilibrium.
 
-### Why a negative current on wheelie exit
-When exiting wheelie mode, a brief **negative** (forward-braking) current pulse actively pushes the front wheel back to the ground. Without this, the bike could hang momentarily at or above the balance point before falling. The exit current magnitude is configurable (`wheelie_exit_brake_current`).
+### Why `balance_current` is seeded into `throttle_current` on exit
+When the balance loop is running, it has wound up a `balance_current` value that represents the steady-state motor drive needed to maintain speed at the wheelie angle. If that is discarded on exit, the motor output drops to zero and the bike decelerates sharply before the ADC2 regen ramps back in.
+
+Seeding `d->throttle_current = d->balance_current` before returning to `STATE_THROTTLE` means the IIR filter continues from the live balance output. Since ADC2 is already > 0.05 (it triggered the exit), `target_current` is immediately negative (regen), and `throttle_current` ramps smoothly from the seeded positive value through zero and into regen — no current step, no deceleration spike.
+
+A forced negative exit-brake pulse is not needed: the PID was already applying positive drive to hold the wheelie, so simply stopping that drive (and letting gravity do its work) is sufficient for the nose to come down. The regen current requested via ADC2 decelerates the bike on top of that.
 
 ### Why ADC values bypass the existing footpad threshold logic
 `footpad_sensor_update()` converts the raw ADC float into an enumerated `FootpadSensorState` (NONE / LEFT / RIGHT / BOTH) by comparing to configured thresholds. This discards the analog value. For throttle and brake control, the raw `adc1` and `adc2` floats on the `FootpadSensor` struct are read directly in `STATE_THROTTLE`, before the thresholding step discards them.
@@ -65,7 +69,7 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 - Added `case STATE_THROTTLE` to `state_compat()` returning `16` (new compat ID)
 
 ### `src/conf/datatypes.h`
-- Added 5 new fields to `RefloatConfig` (before `CfgMeta meta`):
+- Added 4 new fields to `RefloatConfig` (before `CfgMeta meta`):
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -73,13 +77,12 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 | `wheelie_entry_threshold` | `float` | 5° | Degrees below target at which balance loop engages |
 | `throttle_current_max` | `float` | 20A | Max motor current from ADC1 throttle |
 | `throttle_brake_current_max` | `float` | 15A | Max regen current from ADC2 brake |
-| `wheelie_exit_brake_current` | `float` | 5A | Forward braking current applied on wheelie exit |
 
 ### `src/conf/settings.xml`
-- Added full parameter definitions for all 5 new fields (type, range, step, unit, description)
+- Added full parameter definitions for all 4 new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
 - Added two new UI subgroup sections under the existing Remote subgroup:
-  - **Wheelie (Bike Mode)**: `wheelie_target_pitch`, `wheelie_entry_threshold`, `wheelie_exit_brake_current`
+  - **Wheelie (Bike Mode)**: `wheelie_target_pitch`, `wheelie_entry_threshold`
   - **ADC Throttle (Bike Mode)**: `throttle_current_max`, `throttle_brake_current_max`
 
 ### `src/data.h`
@@ -113,11 +116,13 @@ After `check_faults()` stops the balance loop (e.g., pitch fault from landing), 
 #### `STATE_RUNNING` — wheelie exit on brake
 Added at the top of the running loop (before setpoint calculation):
 ```c
+// Wheelie exit: brake pressed on ADC2 -> return to throttle mode.
+// Seed throttle_current from balance_current so the motor output does not
+// drop abruptly. The regen requested via ADC2 will then ramp in naturally
+// through the IIR filter in STATE_THROTTLE.
 if (d->footpad.adc2 > 0.05f) {
-    motor_control_request_current(&d->motor_control,
-        -d->float_conf.wheelie_exit_brake_current);
     state_throttle(&d->state);
-    d->throttle_current = 0;
+    d->throttle_current = d->balance_current;
     break;
 }
 ```
@@ -144,10 +149,21 @@ case STATE_THROTTLE: {
         (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
         engage(d);
         d->setpoint_target = d->float_conf.wheelie_target_pitch;
+        // Bumpless transfer: seed balance_current from the live throttle current so
+        // the motor output does not drop to zero at the moment of handover.
+        d->balance_current = d->throttle_current;
     }
     break;
 }
 ```
+
+#### Bumpless transfer on wheelie entry
+
+`engage()` calls `reset_runtime_vars()`, which zeros both `balance_current` and the PID state. Without correction this causes a current step from whatever `throttle_current` was down to 0A the instant the balance loop takes over, producing an immediate deceleration kick.
+
+The fix seeds `balance_current` from `throttle_current` immediately after `engage()` returns. Because `STATE_RUNNING` integrates `balance_current` with an 0.8/0.2 IIR (`balance_current = balance_current * 0.8 + new_current * 0.2`), starting from the live throttle value gives the PID integral time to wind up to the correct steady-state current before the seed decays. No I-term preload is required — the seeded `balance_current` provides enough continuity.
+
+The PID setpoint itself is not an issue: `reset_runtime_vars()` seeds `setpoint` and `setpoint_target_interpolated` to the **current** pitch, so the first PID error is near zero regardless of how far the target pitch is from the entry pitch. The centering ramp (`SAT_CENTERING`) then moves the setpoint toward `wheelie_target_pitch` at `startup_step_size`.
 
 ---
 
@@ -166,7 +182,6 @@ When deploying on a bike, set the following in the VESC Tool UI:
 | `wheelie_entry_threshold` | `4–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
 | `throttle_current_max` | Per motor spec | Limit to safe value for your motor and battery |
 | `throttle_brake_current_max` | Per motor spec | Limit to safe regen value |
-| `wheelie_exit_brake_current` | `3–8A` | Enough to tip nose down reliably; too high risks abrupt front-wheel slam |
 
 ---
 

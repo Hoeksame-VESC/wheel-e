@@ -313,7 +313,6 @@ typedef struct {
     float wheelie_entry_threshold;
     float throttle_current_max;
     float throttle_brake_current_max;
-    float wheelie_exit_brake_current;
 
     CfgMeta meta;
 } RefloatConfig;
