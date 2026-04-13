@@ -1713,6 +1713,7 @@ Item {
         readonly property int s_Startup: 1
         readonly property int s_Ready: 2
         readonly property int s_Running: 3
+        readonly property int s_Throttle: 4
         readonly property int s_Connecting: 254
         readonly property int s_Disconnected: 255
 
@@ -1720,7 +1721,8 @@ Item {
             [s_Disabled, "DISABLED"],
             [s_Startup, "STARTUP"],
             [s_Ready, "READY"],
-            [s_Running, "RUNNING"],
+            [s_Running, "WHEELIE"],
+            [s_Throttle, "THROTTLE"],
             [s_Connecting, "CONNECTING..."],
             [s_Disconnected, "DISCONNECTED"],
         ])
@@ -1754,19 +1756,6 @@ Item {
         readonly property int fs_Both: 3
 
         property int fpState: fs_None
-
-        onFpStateChanged: {
-            leftSensor.on = false;
-            rightSensor.on = false;
-
-            if (fpState & fs_Left) {
-                leftSensor.on = true;
-            }
-
-            if (fpState & fs_Right) {
-                rightSensor.on = true;
-            }
-        }
 
         // setpoint adjustment type
         readonly property int sat_None: 0
@@ -1857,7 +1846,7 @@ Item {
         property int beepReason: 0
         property string beepReasonString: beepReasonToString.get(beepReason) ?? "unknown (%1)".arg(beepReason)
 
-        property bool pkgStateIsError: ![s_Startup, s_Ready, s_Running, s_Connecting].includes(pkgState)
+        property bool pkgStateIsError: ![s_Startup, s_Ready, s_Running, s_Throttle, s_Connecting].includes(pkgState)
         property bool configLoadingError: false
         property bool fatalError: false
 
@@ -6362,133 +6351,43 @@ Item {
                         property real sidePadding: (width - 2 * height) / 4
 
                         Item {
-                            id: footpad
+                            id: throttleGauge
                             anchors.left: parent.left
                             anchors.leftMargin: parent.sidePadding
                             width: parent.height
                             height: width
 
-                            property real leftVoltage: state.rtData["footpad.adc1"]
-                            property real rightVoltage: state.rtData["footpad.adc2"]
-
-                            property real canvasWidth: width * 0.85
-                            property real scale: canvasWidth / footpadPath.width
-
-                            Path {
-                                id: footpadPath
-
-                                property int width: 100
-                                property int height: 80
-                                property real aspect: height / width
-                                scale: Qt.size(footpad.scale, footpad.scale)
-
-                                PathSvg {path: "M 62 2 L 38 2 A 36 15 180 0 0 2 17 L 2 78 L 98 78 L 98 17 A 36 15 0 0 0 62 2 M 50 11 L 50 69"}
+                            // Positive = throttle (ADC1), negative = brake (ADC2)
+                            property real throttlePct: {
+                                var adc1 = state.rtData["footpad.adc1"];
+                                var adc2 = state.rtData["footpad.adc2"];
+                                if (adc1 > 0.05) return adc1 * 100;
+                                if (adc2 > 0.05) return -adc2 * 100;
+                                return 0;
                             }
 
-                            Path {
-                                id: footpadLeftSensorPath
-                                scale: Qt.size(footpad.scale, footpad.scale)
-                                PathSvg {path: "M 44 8 L 44 72 L 8 72 L 8 18.4 A 30 10.4 180 0 1 38 8 L 44 8"}
-                            }
-
-                            Path {
-                                id: footpadRightSensorPath
-                                scale: Qt.size(footpad.scale, footpad.scale)
-                                PathSvg {path: "M 56 72 L 92 72 L 92 18.4 A 30 10.4 0 0 0 62 8L 56 8 L 56 72"}
-                            }
-
-                            component FpCanvas : Canvas {
+                            NText {
+                                id: throttleDialLabel
+                                anchors.bottom: parent.bottom
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.bottom: footpadLeftAdc.top
-                                anchors.bottomMargin: footpadLeftAdc.font.pixelSize * 0.32
-                                width: parent.canvasWidth
-                                height: width * footpadPath.aspect
-                                contextType: "2d"
-                            }
-
-                            component SensorCanvas : FpCanvas {
-                                property Path path
-                                property bool on: false
-                                opacity: on ? 1 : 0
-
-                                onOnChanged: requestPaint();
-
-                                Behavior on opacity {
-                                    NumberAnimation {
-                                        easing.type: Easing.OutCubic
-                                        duration: 60
-                                    }
-                                }
-
-                                onPaint: {
-                                    var context = getContext("2d");
-                                    context.reset();
-                                    context.fillStyle = Utility.getAppHexColor("lightAccent")
-                                    context.path = path
-                                    context.fill()
-                                }
-                            }
-
-                            FpCanvas {
-                                id: footpadCanvas
-                                onPaint: {
-                                    var context = getContext("2d");
-                                    context.reset();
-                                    context.strokeStyle = Utility.getAppHexColor("lightText")
-                                    context.lineWidth = 2
-                                    context.path = footpadPath
-                                    context.stroke()
-                                }
-                            }
-
-                            SensorCanvas {
-                                id: leftSensor
-                                path: footpadLeftSensorPath
-                            }
-
-                            Glow {
-                                anchors.fill: leftSensor
-                                radius: Math.round(0.08 * unit)
-                                samples: radius * 2 + 1
-                                spread: 0.6
-                                opacity: leftSensor.opacity * 0.4
-                                color: Utility.getAppHexColor("lightAccent")
-                                source: leftSensor
-                            }
-
-                            SensorCanvas {
-                                id: rightSensor
-                                path: footpadRightSensorPath
-                            }
-
-                            Glow {
-                                anchors.fill: rightSensor
-                                radius: Math.round(0.08 * unit)
-                                samples: radius * 2 + 1
-                                spread: 0.6
-                                opacity: rightSensor.opacity * 0.4
-                                color: Utility.getAppHexColor("lightAccent")
-                                source: rightSensor
-                            }
-
-                            NText {
-                                id: footpadLeftAdc
-                                anchors.bottom: parent.bottom
-                                anchors.horizontalCenter: footpadCanvas.horizontalCenter
-                                anchors.horizontalCenterOffset: -footpadCanvas.width / 4
 
                                 font.pixelSize: fontSizeSmall
-                                text: "%1V".arg(toFixed1Zero(parent.leftVoltage))
+                                horizontalAlignment: Text.AlignHCenter
+                                text: "throttle"
                             }
 
-                            NText {
-                                id: footpadRightAdc
-                                anchors.bottom: parent.bottom
-                                anchors.horizontalCenter: footpadCanvas.horizontalCenter
-                                anchors.horizontalCenterOffset: footpadCanvas.width / 4
+                            Dial {
+                                anchors.bottom: throttleDialLabel.top
+                                anchors.bottomMargin: -0.15 * unit
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: parent.width
+                                height: width
 
-                                font.pixelSize: fontSizeSmall
-                                text: "%1V".arg(toFixed1Zero(parent.rightVoltage))
+                                value: parent.throttlePct
+                                allowNegative: true
+                                minValue: -100
+                                maxValue: 100
+                                valueUnit: "%"
                             }
                         }
 
