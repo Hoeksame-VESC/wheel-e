@@ -6,7 +6,7 @@ Item {
     property string pkgLisp: "lisp/package.lisp"
     property string pkgQml: "ui.qml"
     property bool pkgQmlIsFullscreen: false
-    property string pkgOutput: "refloat.vescpkg"
+    property string pkgOutput: "wheel-e.vescpkg"
 
     function isCompatible (fwRxParams) {
         if (fwRxParams.hwTypeStr().toLowerCase() != "vesc") {

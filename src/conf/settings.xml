@@ -1510,6 +1510,96 @@ p, li { white-space: pre-wrap; }
             <suffix> s</suffix>
             <vTx>7</vTx>
         </remote_throttle_grace_period>
+        <wheelie_target_pitch>
+            <longName>Wheelie Target Pitch</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>Target pitch angle (degrees, nose up) at which the balance loop holds the bike in wheelie mode. Adjust to match the natural balance point of your bike.</description>
+            <cDefine>CFG_DFLT_WHEELIE_TARGET_PITCH</cDefine>
+            <editorDecimalsDouble>1</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>80</maxDouble>
+            <minDouble>5</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>0.5</stepDouble>
+            <valDouble>20</valDouble>
+            <vTxDoubleScale>100</vTxDoubleScale>
+            <suffix> °</suffix>
+            <vTx>7</vTx>
+        </wheelie_target_pitch>
+        <wheelie_entry_threshold>
+            <longName>Wheelie Entry Threshold</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>How many degrees below the wheelie target pitch the balance loop engages. E.g. target 20° with threshold 5° means balance activates at 15°.</description>
+            <cDefine>CFG_DFLT_WHEELIE_ENTRY_THRESHOLD</cDefine>
+            <editorDecimalsDouble>1</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>30</maxDouble>
+            <minDouble>1</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>0.5</stepDouble>
+            <valDouble>5</valDouble>
+            <vTxDoubleScale>100</vTxDoubleScale>
+            <suffix> °</suffix>
+            <vTx>7</vTx>
+        </wheelie_entry_threshold>
+        <throttle_current_max>
+            <longName>Throttle Current Max</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>Maximum motor current (A) applied when ADC1 throttle is fully pressed during normal (two-wheel) riding.</description>
+            <cDefine>CFG_DFLT_THROTTLE_CURRENT_MAX</cDefine>
+            <editorDecimalsDouble>1</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>200</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>5</stepDouble>
+            <valDouble>20</valDouble>
+            <vTxDoubleScale>10</vTxDoubleScale>
+            <suffix> A</suffix>
+            <vTx>7</vTx>
+        </throttle_current_max>
+        <throttle_brake_current_max>
+            <longName>Throttle Brake Current Max</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>Maximum regenerative braking current (A) applied when ADC2 brake is fully pressed during normal (two-wheel) riding.</description>
+            <cDefine>CFG_DFLT_THROTTLE_BRAKE_CURRENT_MAX</cDefine>
+            <editorDecimalsDouble>1</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>200</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>5</stepDouble>
+            <valDouble>15</valDouble>
+            <vTxDoubleScale>10</vTxDoubleScale>
+            <suffix> A</suffix>
+            <vTx>7</vTx>
+        </throttle_brake_current_max>
+        <wheelie_exit_brake_current>
+            <longName>Wheelie Exit Brake Current</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>Forward braking current (A) briefly applied when exiting wheelie mode via the brake input. Ensures the front wheel tips down reliably.</description>
+            <cDefine>CFG_DFLT_WHEELIE_EXIT_BRAKE_CURRENT</cDefine>
+            <editorDecimalsDouble>1</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>50</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>1</stepDouble>
+            <valDouble>5</valDouble>
+            <vTxDoubleScale>10</vTxDoubleScale>
+            <suffix> A</suffix>
+            <vTx>7</vTx>
+        </wheelie_exit_brake_current>
         <startup_pitch_tolerance>
             <longName>Startup Pitch Axis Angle Tolerance</longName>
             <type>1</type>
@@ -3963,6 +4053,11 @@ p, li { white-space: pre-wrap; }
         <ser>inputtilt_deadband</ser>
         <ser>remote_throttle_current_max</ser>
         <ser>remote_throttle_grace_period</ser>
+        <ser>wheelie_target_pitch</ser>
+        <ser>wheelie_entry_threshold</ser>
+        <ser>throttle_current_max</ser>
+        <ser>throttle_brake_current_max</ser>
+        <ser>wheelie_exit_brake_current</ser>
         <ser>startup_pitch_tolerance</ser>
         <ser>startup_roll_tolerance</ser>
         <ser>startup_speed</ser>
@@ -4249,6 +4344,13 @@ p, li { white-space: pre-wrap; }
                     <param>::sep::Remote Throttle</param>
                     <param>remote_throttle_current_max</param>
                     <param>remote_throttle_grace_period</param>
+                    <param>::sep::Wheelie (Bike Mode)</param>
+                    <param>wheelie_target_pitch</param>
+                    <param>wheelie_entry_threshold</param>
+                    <param>wheelie_exit_brake_current</param>
+                    <param>::sep::ADC Throttle (Bike Mode)</param>
+                    <param>throttle_current_max</param>
+                    <param>throttle_brake_current_max</param>
                 </subgroupParams>
             </subgroup>
             <subgroup>

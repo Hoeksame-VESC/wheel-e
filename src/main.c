@@ -713,7 +713,7 @@ static void calculate_setpoint_target(Data *d) {
     } else {
         // Normal running
         d->state.sat = SAT_NONE;
-        d->setpoint_target = 0;
+        d->setpoint_target = d->float_conf.wheelie_target_pitch;
     }
 
     if (d->state.wheelslip && d->motor.duty_cycle > d->motor.duty_max_with_margin) {
@@ -834,8 +834,8 @@ static void refloat_thd(void *arg) {
         case (STATE_STARTUP):
             if (VESC_IF->imu_startup_done()) {
                 reset_runtime_vars(d);
-                // set state to READY so we need to meet start conditions to start
-                d->state.state = STATE_READY;
+                // set state to THROTTLE (normal bike riding mode)
+                d->state.state = STATE_THROTTLE;
 
                 // if within 5V of LV tiltback threshold, issue 1 beep for each volt below that
                 float threshold = d->motor.lv_threshold + 5;
@@ -859,12 +859,27 @@ static void refloat_thd(void *arg) {
                         d->float_conf.startup_pitch_tolerance + d->startup_pitch_trickmargin;
                     timer_refresh(&d->time, &d->fault_angle_pitch_timer);
                 }
+                // Bike mode: return to throttle riding after a balance fault
+                if (d->state.state == STATE_READY) {
+                    state_throttle(&d->state);
+                    d->throttle_current = 0;
+                }
                 motor_control_play_click(&d->motor_control);
                 data_recorder_trigger(&d->data_record, false);
                 break;
             }
 
             d->enable_upside_down = true;
+
+            // Wheelie exit: brake pressed on ADC2 -> apply forward braking and return to throttle
+            if (d->footpad.adc2 > 0.05f) {
+                motor_control_request_current(
+                    &d->motor_control, -d->float_conf.wheelie_exit_brake_current
+                );
+                state_throttle(&d->state);
+                d->throttle_current = 0;
+                break;
+            }
 
             // Calculate setpoint and interpolation
             calculate_setpoint_target(d);
@@ -1069,7 +1084,33 @@ static void refloat_thd(void *arg) {
 
             do_rc_move(d);
             break;
-        case (STATE_DISABLED):
+        case STATE_THROTTLE: {
+            // Normal two-wheel riding: ADC1 = throttle, ADC2 = regen brake
+            float throttle = d->footpad.adc1 > 0.05f ? d->footpad.adc1 : 0.0f;
+            float brake = d->footpad.adc2 > 0.05f ? d->footpad.adc2 : 0.0f;
+
+            float target_current;
+            if (brake > 0.0f) {
+                // Regen braking (negative current = decelerating)
+                target_current = -brake * d->float_conf.throttle_brake_current_max;
+            } else {
+                target_current = throttle * d->float_conf.throttle_current_max;
+            }
+
+            // Smooth the output with a 10% IIR filter
+            d->throttle_current = d->throttle_current * 0.9f + target_current * 0.1f;
+            motor_control_request_current(&d->motor_control, d->throttle_current);
+
+            // Wheelie entry: engage balance loop when pitch approaches the target angle
+            if (d->imu.balance_pitch >=
+                (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
+                engage(d);
+                // Set centering target to the wheelie balance point, not 0
+                d->setpoint_target = d->float_conf.wheelie_target_pitch;
+            }
+            break;
+        }
+        case STATE_DISABLED:
             break;
         }
 

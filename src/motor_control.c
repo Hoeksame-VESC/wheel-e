@@ -65,9 +65,11 @@ void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const
     }
 
     if (mc->parking_brake_mode == PARKING_BRAKE_ALWAYS ||
-        (mc->parking_brake_mode == PARKING_BRAKE_IDLE && state != STATE_RUNNING && abs_erpm < 50)) {
+        (mc->parking_brake_mode == PARKING_BRAKE_IDLE && state != STATE_RUNNING &&
+         state != STATE_THROTTLE && abs_erpm < 50)) {
         mc->parking_brake_active = true;
-    } else if (mc->parking_brake_mode == PARKING_BRAKE_NEVER || state == STATE_RUNNING) {
+    } else if (mc->parking_brake_mode == PARKING_BRAKE_NEVER || state == STATE_RUNNING ||
+               state == STATE_THROTTLE) {
         mc->parking_brake_active = false;
     }
 
