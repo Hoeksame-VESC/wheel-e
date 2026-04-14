@@ -90,6 +90,8 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 
 ### `src/motor_control.c`
 - `motor_control_apply()`: `STATE_THROTTLE` is now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
+- Added `brake_current_requested` / `requested_brake_current` fields to `MotorControl`
+- Added `motor_control_request_brake_current()`: sets the new fields; `motor_control_apply()` routes these to `VESC_IF->mc_set_brake_current()` (positive value, signed-current path bypassed) so regen never drives the motor in reverse
 
 ### `src/main.c`
 
@@ -135,6 +137,7 @@ case STATE_THROTTLE: {
 
     float target_current;
     if (brake > 0.0f) {
+        // Store negative internally for IIR smoothing (positive = throttle, negative = brake)
         target_current = -brake * d->float_conf.throttle_brake_current_max;
     } else {
         target_current = throttle * d->float_conf.throttle_current_max;
@@ -142,7 +145,14 @@ case STATE_THROTTLE: {
 
     // 10% IIR smoothing
     d->throttle_current = d->throttle_current * 0.9f + target_current * 0.1f;
-    motor_control_request_current(&d->motor_control, d->throttle_current);
+
+    // Route to the correct VESC call: mc_set_brake_current for regen (never reverses
+    // the motor), mc_set_current for forward throttle.
+    if (d->throttle_current < 0.0f) {
+        motor_control_request_brake_current(&d->motor_control, -d->throttle_current);
+    } else {
+        motor_control_request_current(&d->motor_control, d->throttle_current);
+    }
 
     // Wheelie entry: pitch within threshold of target → engage balance loop
     if (d->imu.balance_pitch >=
@@ -156,6 +166,8 @@ case STATE_THROTTLE: {
     break;
 }
 ```
+
+**Bug fix — regen threw wheel in reverse:** The original implementation passed a negative value to `motor_control_request_current()`, which calls `mc_set_current()`. VESC interprets a signed current as a torque direction, so a negative value drives the motor in reverse. The fix uses `motor_control_request_brake_current()` instead, which calls `mc_set_brake_current()` with a positive value — this always regenerates energy regardless of direction and cannot reverse the motor.
 
 #### Bumpless transfer on wheelie entry
 

@@ -46,6 +46,11 @@ void motor_control_request_current(MotorControl *mc, float current) {
     mc->requested_current = current;
 }
 
+void motor_control_request_brake_current(MotorControl *mc, float current) {
+    mc->brake_current_requested = true;
+    mc->requested_brake_current = current;
+}
+
 static inline void reset_tone(MotorControl *mc) {
     mc->tone_ticks = 0;
     mc->tone_counter = 0;
@@ -99,6 +104,8 @@ void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const
         // Keep modulation on for 50ms in case we request close-to-0 current
         VESC_IF->mc_set_current_off_delay(0.05f);
         VESC_IF->mc_set_current(mc->requested_current);
+    } else if (mc->brake_current_requested) {
+        VESC_IF->mc_set_brake_current(mc->requested_brake_current);
     } else {
         // Brake logic
         if (abs_erpm > ERPM_MOVING_THRESHOLD) {
@@ -122,6 +129,8 @@ void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const
 
     mc->current_requested = false;
     mc->requested_current = 0.0f;
+    mc->brake_current_requested = false;
+    mc->requested_brake_current = 0.0f;
 }
 
 void motor_control_play_tone(MotorControl *mc, uint16_t frequency, float intensity) {

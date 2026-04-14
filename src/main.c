@@ -1091,7 +1091,7 @@ static void refloat_thd(void *arg) {
 
             float target_current;
             if (brake > 0.0f) {
-                // Regen braking (negative current = decelerating)
+                // Regen braking: store negative internally for IIR smoothing
                 target_current = -brake * d->float_conf.throttle_brake_current_max;
             } else {
                 target_current = throttle * d->float_conf.throttle_current_max;
@@ -1099,7 +1099,13 @@ static void refloat_thd(void *arg) {
 
             // Smooth the output with a 10% IIR filter
             d->throttle_current = d->throttle_current * 0.9f + target_current * 0.1f;
-            motor_control_request_current(&d->motor_control, d->throttle_current);
+
+            // Use mc_set_brake_current for regen so VESC never runs in reverse
+            if (d->throttle_current < 0.0f) {
+                motor_control_request_brake_current(&d->motor_control, -d->throttle_current);
+            } else {
+                motor_control_request_current(&d->motor_control, d->throttle_current);
+            }
 
             // Wheelie entry: engage balance loop when pitch approaches the target angle
             if (d->imu.balance_pitch >=

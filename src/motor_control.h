@@ -28,6 +28,8 @@ typedef struct {
     bool disabled;
     bool current_requested;
     float requested_current;
+    bool brake_current_requested;
+    float requested_brake_current;
 
     uint8_t click_counter;
     time_t brake_timer;
@@ -49,6 +51,8 @@ void motor_control_init(MotorControl *mc);
 void motor_control_configure(MotorControl *mc, const RefloatConfig *config);
 
 void motor_control_request_current(MotorControl *mc, float current);
+
+void motor_control_request_brake_current(MotorControl *mc, float current);
 
 void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const Time *time);
 
