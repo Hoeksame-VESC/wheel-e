@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -100 200 200" width="512" height="256">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -56 200 156" width="512" height="400">
   <path d="m 51.973285,73.872716 a 21.978792,22.138835 0 1 0 43.957582,0 21.978792,22.138835 0 1 0 -43.957582,0 z"
       fill="none" stroke="#aaaaaa" stroke-width="1.5" id="wheel1"/>
   <path d="m -94.467655,72.844768 a 21.978792,22.138835 0 1 0 43.957582,0 21.978792,22.138835 0 1 0 -43.957582,0 z"
