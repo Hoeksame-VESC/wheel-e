@@ -77,13 +77,14 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 | `wheelie_entry_threshold` | `float` | 5° | Degrees below target at which balance loop engages |
 | `throttle_current_max` | `float` | 20A | Max motor current from ADC1 throttle |
 | `throttle_brake_current_max` | `float` | 15A | Max regen current from ADC2 brake |
+| `throttle_adc_voltage_max` | `float` | 3.2V | ADC voltage that maps to 100% throttle/brake |
 
 ### `src/conf/settings.xml`
-- Added full parameter definitions for all 4 new fields (type, range, step, unit, description)
+- Added full parameter definitions for all 5 new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
 - Added two new UI subgroup sections under the existing Remote subgroup:
   - **Wheelie (Bike Mode)**: `wheelie_target_pitch`, `wheelie_entry_threshold`
-  - **ADC Throttle (Bike Mode)**: `throttle_current_max`, `throttle_brake_current_max`
+  - **ADC Throttle (Bike Mode)**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_adc_voltage_max`
 
 ### `src/data.h`
 - Added `float throttle_current` to the `Data` struct — holds the IIR-filtered current output in `STATE_THROTTLE`
@@ -130,10 +131,20 @@ if (d->footpad.adc2 > 0.05f) {
 ```
 
 #### New `STATE_THROTTLE` case
+
+ADC readings are normalized by `throttle_adc_voltage_max` so that the configured voltage equals 100% input. Values above the configured voltage are clamped to 1.0.
+
 ```c
 case STATE_THROTTLE: {
-    float throttle = d->footpad.adc1 > 0.05f ? d->footpad.adc1 : 0.0f;
-    float brake    = d->footpad.adc2 > 0.05f ? d->footpad.adc2 : 0.0f;
+    float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
+        ? 1.0f / d->float_conf.throttle_adc_voltage_max
+        : 1.0f;
+    float throttle = d->footpad.adc1 > 0.05f
+        ? fminf(d->footpad.adc1 * adc_scale, 1.0f)
+        : 0.0f;
+    float brake = d->footpad.adc2 > 0.05f
+        ? fminf(d->footpad.adc2 * adc_scale, 1.0f)
+        : 0.0f;
 
     float target_current;
     if (brake > 0.0f) {
@@ -194,6 +205,7 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg -> Tune | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `4–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
 |Refloat Cfg -> Tune | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
 |Refloat Cfg -> Tune | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
+|Refloat Cfg -> Tune | Throttle ADC Full-Scale Voltage (`throttle_adc_voltage_max`) | `3.2` | Voltage at which throttle/brake reads as 100%; adjust to match your throttle hardware |
 
 ---
 

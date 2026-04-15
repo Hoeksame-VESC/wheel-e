@@ -1086,8 +1086,12 @@ static void refloat_thd(void *arg) {
             break;
         case STATE_THROTTLE: {
             // Normal two-wheel riding: ADC1 = throttle, ADC2 = regen brake
-            float throttle = d->footpad.adc1 > 0.05f ? d->footpad.adc1 : 0.0f;
-            float brake = d->footpad.adc2 > 0.05f ? d->footpad.adc2 : 0.0f;
+            float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
+                ? 1.0f / d->float_conf.throttle_adc_voltage_max
+                : 1.0f;
+            float throttle =
+                d->footpad.adc1 > 0.05f ? fminf(d->footpad.adc1 * adc_scale, 1.0f) : 0.0f;
+            float brake = d->footpad.adc2 > 0.05f ? fminf(d->footpad.adc2 * adc_scale, 1.0f) : 0.0f;
 
             float target_current;
             if (brake > 0.0f) {
