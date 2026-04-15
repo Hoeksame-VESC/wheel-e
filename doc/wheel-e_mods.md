@@ -183,17 +183,17 @@ The PID setpoint itself is not an issue: `reset_runtime_vars()` seeds `setpoint`
 
 When deploying on a bike, set the following in the VESC Tool UI:
 
-| Parameter | Recommended value | Reason |
-|---|---|---|
-| `fault_adc1` | `0` | Disables footpad switch logic; ADC1 raw value still readable for throttle |
-| `fault_adc2` | `0` | Disables footpad switch logic; ADC2 raw value still readable for brake |
-| `fault_pitch` | `60–80°` | Must be above wheelie angle to avoid spurious pitch faults during balance |
-| `startup_pitch_tolerance` | `80°` | Not strictly needed (no READY state used), but avoids any residual engage guard |
-| `inputtilt_remote_type` | `NONE` | PPM pin is used for the beeper; do not configure PPM remote |
-| `wheelie_target_pitch` | Tune per bike | Physical balance point — start at 20° and adjust |
-| `wheelie_entry_threshold` | `4–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
-| `throttle_current_max` | Per motor spec | Limit to safe value for your motor and battery |
-| `throttle_brake_current_max` | Per motor spec | Limit to safe regen value |
+|Path| Parameter | Recommended value | Reason |
+|---|---|---|---|
+|Refloat Cfg -> Specs | ADC1 Switch Voltage (`fault_adc1`) | `0` | Disables footpad switch logic; ADC1 raw value still readable for throttle |
+|Refloat Cfg -> Specs | ADC2 Switch Voltage (`fault_adc2`) | `0` | Disables footpad switch logic; ADC2 raw value still readable for brake |
+|Refloat Cfg -> Stop | Pitch Axis Fault Cutoff (`fault_pitch`) | `60–80°` | Must be above wheelie angle to avoid spurious pitch faults during balance |
+|Refloat Cfg -> Startup | Startup Pitch Axis Angle Tolerance (`startup_pitch_tolerance`) | `80°` | Not strictly needed (no READY state used), but avoids any residual engage guard |
+|Refloat Cfg -> Remote | Remote Type (`inputtilt_remote_type`) | `NONE` | PPM pin is used for the beeper; do not configure PPM remote |
+|Refloat Cfg -> Tune | Wheelie Target Pitch (`wheelie_target_pitch`) | Tune per bike | Physical balance point — start at 20° and adjust |
+|Refloat Cfg -> Tune | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `4–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
+|Refloat Cfg -> Tune | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
+|Refloat Cfg -> Tune | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
 
 ---
 
