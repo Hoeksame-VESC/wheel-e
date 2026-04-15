@@ -1,35 +1,19 @@
-# Refloat - VESC Package
-Refloat is a VESC Package for self-balancing skateboards. It aims to:
-- Provide a polished and full-featured user experience
-- Maintain a clean and reliable codebase that is easy to extend
-- Make it easy for anyone to use Refloat as a base for experimentation
-- Standardize interfaces so that package clones can interact with other parts of the ecosystem (3rd party apps, light modules, VESC Express addons etc.) in a compatible way
+# Wheel-E - VESC Package
+Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The package is a fork of [ReFloat](ReFloat_README.md) used in self-balancing skateboards.
 
-_**If you're looking for README of the actual package, you can find it [here](package_README.md).**_
+Status as of 15.04.2026: Some code implemented. Compiles and runs. Tested handheld on a vesc Pint. Bike not yet fabricated...
 
-## Contributing
-Contributions are welcome and appreciated, please refer to [Contributing](CONTRIBUTING.md).
+## Code summary
+* A "THROTTLE" state when not wheelieing using ADC1 for throttle and ADC2 for brake
+* A "WHEELIE" state whitch is the the same as "RUNNING" state on onewheels, but with a different angle setpoint
+* Foot pad sensors disabled
+* Changed the IU to display a mini-bike and throttle/brake gauge instead of footpads
 
-## Building
-### Requirements
-- `gcc-arm-embedded` version 13 or higher
-- `make`
-- `vesc_tool`
+[code change doc](doc/wheel-e_mods.md)
 
-To build the package, run:
-```sh
-make
-```
+## Prototype hardware
+* Spintend UBox Lite 100v 100A
+* Pint motor w. stock tire
+* 14s7p 50s battery pack
 
-Note a new beta (as of writing this, unreleased) version of `vesc_tool` is needed for the above to work. To build the package with the current / old `vesc_tool` version, use:
-```sh
-make OLDVT=1
-```
-
-If you don't have `vesc_tool` in your `$PATH` (but you have, for example, a downloaded `vesc_tool` binary), you can specify the `vesc_tool` to use:
-```sh
-make VESC_TOOL=/path/to/vesc_tool
-```
-
-## Documentation
-[Development Documentation](doc/index.md)
+[ReFloat README](ReFloat_README.md)
