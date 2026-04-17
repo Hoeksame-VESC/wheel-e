@@ -13,7 +13,9 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
 ### 1. Throttle and brake inputs
 - **ADC1** = analog throttle (0–1 mapped to 0–`throttle_current_max`)
 - **ADC2** = analog regenerative brake (0–1 mapped to 0–`throttle_brake_current_max`)
-- Both inputs use a 5% deadband to avoid creep at rest
+- Raw ADC inputs are smoothed with a configurable IIR low-pass filter (`throttle_adc_filter`) to reduce noise
+- Both inputs use a 5% deadband with remapping: values below 5% read as 0%, and the range [5%, 100%] is rescaled to [0%, 100%]
+- ADC voltage is normalized by `throttle_adc_voltage_max` so the configured voltage maps to 100%
 
 ### 2. Wheelie entry trigger
 - The balance/wheelie loop engages automatically when pitch rises to within `wheelie_entry_threshold` degrees below `wheelie_target_pitch`
@@ -22,9 +24,10 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
 - Throttle input is **ignored** while in wheelie/balance mode; only leaning affects speed
 
 ### 3. Wheelie exit
-- Pressing the brake (ADC2 > 5%) while in wheelie mode:
-  1. Returns to normal throttle mode (`STATE_THROTTLE`), seeding `throttle_current` from the live `balance_current` for a bumpless handover
-  2. The ADC2 regen current ramps in naturally via the IIR filter
+- Pressing the brake (ADC2 > 5%) while in wheelie mode triggers an exit sequence:
+  - **With exit ramp** (`wheelie_exit_ramp_time` > 0): the balance loop stays active and the pitch setpoint ramps from `wheelie_target_pitch` down to 0° over the configured time, gently lowering the front wheel. Once the setpoint reaches ~0°, the state transitions to `STATE_THROTTLE` with `throttle_current` seeded from `balance_current` for a bumpless handover.
+  - **Without exit ramp** (`wheelie_exit_ramp_time` = 0): instant exit to `STATE_THROTTLE`, seeding `throttle_current` from `balance_current`.
+- **Re-entry hysteresis**: after exiting wheelie, re-entry is blocked until pitch drops below `wheelie_entry_threshold` (near level). This prevents a brief brake tap from immediately re-engaging wheelie.
 - Throttle (ADC1) is ignored in wheelie mode
 
 ### 4. Safety / rider presence
@@ -69,7 +72,7 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 - Added `case STATE_THROTTLE` to `state_compat()` returning `16` (new compat ID)
 
 ### `src/conf/datatypes.h`
-- Added 4 new fields to `RefloatConfig` (before `CfgMeta meta`):
+- Added 7 new fields to `RefloatConfig` (before `CfgMeta meta`):
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -82,7 +85,7 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 | `throttle_adc_filter` | `float` | 0.5 | IIR low-pass filter coefficient for ADC inputs (0 = off, 0.99 = heavy) |
 
 ### `src/conf/settings.xml`
-- Added full parameter definitions for all 5 new fields (type, range, step, unit, description)
+- Added full parameter definitions for all 7 new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
 - Added two new UI separator sections under the **Tune** subgroup:
   - **ADC Throttle (Bike Mode)**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_adc_voltage_max`, `throttle_adc_filter`
@@ -258,7 +261,7 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg -> Startup | Startup Pitch Axis Angle Tolerance (`startup_pitch_tolerance`) | `80°` | Not strictly needed (no READY state used), but avoids any residual engage guard |
 |Refloat Cfg -> Remote | Remote Type (`inputtilt_remote_type`) | `NONE` | PPM pin is used for the beeper; do not configure PPM remote |
 |Refloat Cfg -> Tune | Wheelie Target Pitch (`wheelie_target_pitch`) | Tune per bike | Physical balance point — start at 20° and adjust |
-|Refloat Cfg -> Tune | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `4–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
+|Refloat Cfg -> Tune | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `2–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
 |Refloat Cfg -> Tune | Wheelie Exit Ramp Time (`wheelie_exit_ramp_time`) | `1.0` | Seconds to gently lower the front wheel; 0 = instant drop to throttle mode |
 |Refloat Cfg -> Tune | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
 |Refloat Cfg -> Tune | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
@@ -274,16 +277,25 @@ STARTUP
    │ (IMU ready)
    ▼
 STATE_THROTTLE ◄───────────────────────────────────────────┐
-   │  ADC1 → throttle current                              │
-   │  ADC2 → regen brake current                           │
+   │  ADC inputs filtered (IIR low-pass)                   │
+   │  ADC1 → throttle current (5% deadband, remapped)      │
+   │  ADC2 → regen brake current (5% deadband, remapped)   │
    │                                                       │
-   │ pitch ≥ (target − threshold)                          │
+   │  Re-entry blocked until pitch < entry_threshold       │
+   │  (hysteresis re-arm)                                  │
+   │                                                       │
+   │ pitch ≥ (target − threshold) AND re-entry armed       │
    ▼                                                       │
 STATE_RUNNING (wheelie balance loop)                       │
    │  pitch PID holds wheelie_target_pitch                 │
    │  ADC1 ignored / ADC2 ignored for speed control        │
    │                                                       │
-   ├── ADC2 > 5% ──► apply exit brake current ────────────►│
+   ├── ADC2 > 5% ─┬─ ramp_time > 0:                        │
+   │              │   setpoint ramps to 0° (balance        │
+   │              │   loop active), then ─────────────────►│
+   │              │                                        │
+   │              └─ ramp_time = 0:                        │
+   │                  instant exit ───────────────────────►│
    │                                                       │
    └── fault (pitch/roll/temp/voltage) ──► STATE_THROTTLE ─┘
 ```
