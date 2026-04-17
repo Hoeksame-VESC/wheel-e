@@ -78,16 +78,18 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 | `throttle_current_max` | `float` | 20A | Max motor current from ADC1 throttle |
 | `throttle_brake_current_max` | `float` | 15A | Max regen current from ADC2 brake |
 | `throttle_adc_voltage_max` | `float` | 3.2V | ADC voltage that maps to 100% throttle/brake |
+| `throttle_adc_filter` | `float` | 0.5 | IIR low-pass filter coefficient for ADC inputs (0 = off, 0.99 = heavy) |
 
 ### `src/conf/settings.xml`
 - Added full parameter definitions for all 5 new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
-- Added two new UI subgroup sections under the existing Remote subgroup:
+- Added two new UI separator sections under the **Tune** subgroup:
+  - **ADC Throttle (Bike Mode)**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_adc_voltage_max`, `throttle_adc_filter`
   - **Wheelie (Bike Mode)**: `wheelie_target_pitch`, `wheelie_entry_threshold`
-  - **ADC Throttle (Bike Mode)**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_adc_voltage_max`
 
 ### `src/data.h`
 - Added `float throttle_current` to the `Data` struct — holds the IIR-filtered current output in `STATE_THROTTLE`
+- Added `float throttle_adc1_filtered` and `float throttle_adc2_filtered` — IIR-filtered ADC inputs for noise reduction
 
 ### `src/motor_control.c`
 - `motor_control_apply()`: `STATE_THROTTLE` is now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
@@ -136,14 +138,25 @@ ADC readings are normalized by `throttle_adc_voltage_max` so that the configured
 
 ```c
 case STATE_THROTTLE: {
+    // Low-pass filter raw ADC inputs to reduce noise
+    float filter = d->float_conf.throttle_adc_filter;
+    d->throttle_adc1_filtered =
+        d->throttle_adc1_filtered * filter + d->footpad.adc1 * (1.0f - filter);
+    d->throttle_adc2_filtered =
+        d->throttle_adc2_filtered * filter + d->footpad.adc2 * (1.0f - filter);
+
+    float adc1 = d->throttle_adc1_filtered;
+    float adc2 = d->throttle_adc2_filtered;
+
     float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
         ? 1.0f / d->float_conf.throttle_adc_voltage_max
         : 1.0f;
-    float throttle = d->footpad.adc1 > 0.05f
-        ? fminf(d->footpad.adc1 * adc_scale, 1.0f)
+    // 5% deadband with remapping: [0.05, 1.0] -> [0.0, 1.0]
+    float throttle = adc1 > 0.05f
+        ? fminf((adc1 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
         : 0.0f;
-    float brake = d->footpad.adc2 > 0.05f
-        ? fminf(d->footpad.adc2 * adc_scale, 1.0f)
+    float brake = adc2 > 0.05f
+        ? fminf((adc2 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
         : 0.0f;
 
     float target_current;
@@ -206,6 +219,7 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg -> Tune | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
 |Refloat Cfg -> Tune | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
 |Refloat Cfg -> Tune | Throttle ADC Full-Scale Voltage (`throttle_adc_voltage_max`) | `3.2` | Voltage at which throttle/brake reads as 100%; adjust to match your throttle hardware |
+|Refloat Cfg -> Tune | Throttle ADC Filter (`throttle_adc_filter`) | `0.5` | Low-pass filter strength for ADC noise; 0 = off, higher = smoother but more lag |
 
 ---
 

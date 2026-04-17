@@ -102,6 +102,8 @@ typedef struct {
 
     // Bike throttle mode: smoothed current output from ADC1 throttle / ADC2 brake
     float throttle_current;
+    float throttle_adc1_filtered;
+    float throttle_adc2_filtered;
 
     float setpoint, setpoint_target, setpoint_target_interpolated;
     float noseangling_interpolated;

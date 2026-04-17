@@ -1086,12 +1086,26 @@ static void refloat_thd(void *arg) {
             break;
         case STATE_THROTTLE: {
             // Normal two-wheel riding: ADC1 = throttle, ADC2 = regen brake
+
+            // Low-pass filter raw ADC inputs to reduce noise
+            float filter = d->float_conf.throttle_adc_filter;
+            d->throttle_adc1_filtered =
+                d->throttle_adc1_filtered * filter + d->footpad.adc1 * (1.0f - filter);
+            d->throttle_adc2_filtered =
+                d->throttle_adc2_filtered * filter + d->footpad.adc2 * (1.0f - filter);
+
+            float adc1 = d->throttle_adc1_filtered;
+            float adc2 = d->throttle_adc2_filtered;
+
             float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
                 ? 1.0f / d->float_conf.throttle_adc_voltage_max
                 : 1.0f;
-            float throttle =
-                d->footpad.adc1 > 0.05f ? fminf(d->footpad.adc1 * adc_scale, 1.0f) : 0.0f;
-            float brake = d->footpad.adc2 > 0.05f ? fminf(d->footpad.adc2 * adc_scale, 1.0f) : 0.0f;
+            float throttle = adc1 > 0.05f
+                ? fminf((adc1 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
+                : 0.0f;
+            float brake = adc2 > 0.05f
+                ? fminf((adc2 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
+                : 0.0f;
 
             float target_current;
             if (brake > 0.0f) {

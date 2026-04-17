@@ -314,6 +314,7 @@ typedef struct {
     float throttle_current_max;
     float throttle_brake_current_max;
     float throttle_adc_voltage_max;
+    float throttle_adc_filter;
 
     CfgMeta meta;
 } RefloatConfig;
