@@ -1,13 +1,15 @@
 # Wheel-E - VESC Package
-Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The package is a fork of [ReFloat](ReFloat_README.md) used in self-balancing skateboards.
+Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The package is a fork of [ReFloatgit ](ReFloat_README.md) used in self-balancing skateboards.
 
 Status as of 15.04.2026: Some code implemented. Compiles and runs. Tested handheld on a vesc Pint. Bike not yet fabricated...
 
 ## Code summary
 * A "THROTTLE" state when not wheelieing using ADC1 for throttle and ADC2 for brake
 * A "WHEELIE" state whitch is the the same as "RUNNING" state on onewheels, but with a different angle setpoint
-* Foot pad sensors disabled
-* Changed the IU to display a mini-bike and throttle/brake gauge instead of footpads
+    * This mode is triggered when the pitch value gets close to the angle setpoint
+    * It exits back to "THROTTLE" when pressing the brake
+* Foot pad sensors disabled (Set ADC switching voltages to 0v)
+* The IU displays a mini-bike and throttle/brake gauge instead of footpads
 
 [code change doc](doc/wheel-e_mods.md)
 
