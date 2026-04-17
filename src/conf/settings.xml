@@ -1554,6 +1554,28 @@ p, li { white-space: pre-wrap; }
             <suffix> °</suffix>
             <vTx>7</vTx>
         </wheelie_entry_threshold>
+        <wheelie_exit_ramp_time>
+            <longName>Wheelie Exit Ramp Time</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Time in seconds to ramp the balance setpoint from the wheelie target pitch down to 0° when exiting wheelie mode via brake. The balance loop stays active during the ramp, gently lowering the front wheel. Set to 0 for an instant exit (drops directly to throttle mode).&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_WHEELIE_EXIT_RAMP_TIME</cDefine>
+            <editorDecimalsDouble>1</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>5.0</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>0.1</stepDouble>
+            <valDouble>1.0</valDouble>
+            <vTxDoubleScale>10</vTxDoubleScale>
+            <suffix> s</suffix>
+            <vTx>7</vTx>
+        </wheelie_exit_ramp_time>
         <throttle_current_max>
             <longName>Throttle Current Max</longName>
             <type>1</type>
@@ -4097,6 +4119,7 @@ p, li { white-space: pre-wrap; }
         <ser>remote_throttle_grace_period</ser>
         <ser>wheelie_target_pitch</ser>
         <ser>wheelie_entry_threshold</ser>
+        <ser>wheelie_exit_ramp_time</ser>
         <ser>throttle_current_max</ser>
         <ser>throttle_brake_current_max</ser>
         <ser>throttle_adc_voltage_max</ser>
@@ -4234,6 +4257,7 @@ p, li { white-space: pre-wrap; }
                     <param>::sep::Wheelie (Bike Mode)</param>
                     <param>wheelie_target_pitch</param>
                     <param>wheelie_entry_threshold</param>
+                    <param>wheelie_exit_ramp_time</param>
                     <param>::sep::PID</param>
                     <param>kp</param>
                     <param>kp2</param>

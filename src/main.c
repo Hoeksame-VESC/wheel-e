@@ -195,6 +195,14 @@ static void configure(Data *d) {
     d->tiltback_lv_step_size = d->float_conf.tiltback_lv_speed / d->float_conf.hertz;
     d->tiltback_return_step_size = d->float_conf.tiltback_return_speed / d->float_conf.hertz;
 
+    // Wheelie exit ramp: degrees per loop iteration to ramp setpoint to 0
+    if (d->float_conf.wheelie_exit_ramp_time > 0.0f) {
+        d->wheelie_exit_step_size = d->float_conf.wheelie_target_pitch /
+            (d->float_conf.wheelie_exit_ramp_time * d->float_conf.hertz);
+    } else {
+        d->wheelie_exit_step_size = 0.0f;
+    }
+
     // Feature: Soft Start
     d->softstart_ramp_step_size = (float) 100 / d->float_conf.hertz;
 
@@ -246,6 +254,7 @@ static void reset_runtime_vars(Data *d) {
 
     d->balance_current = 0;
     d->wheelie_entry_armed = true;
+    d->wheelie_exiting = false;
 
     // Set values for startup
     d->setpoint = d->imu.balance_pitch;
@@ -714,7 +723,10 @@ static void calculate_setpoint_target(Data *d) {
     } else {
         // Normal running
         d->state.sat = SAT_NONE;
-        d->setpoint_target = d->float_conf.wheelie_target_pitch;
+        // During wheelie exit ramp, keep setpoint_target at 0 (set by exit trigger)
+        if (!d->wheelie_exiting) {
+            d->setpoint_target = d->float_conf.wheelie_target_pitch;
+        }
     }
 
     if (d->state.wheelslip && d->motor.duty_cycle > d->motor.duty_max_with_margin) {
@@ -872,24 +884,37 @@ static void refloat_thd(void *arg) {
 
             d->enable_upside_down = true;
 
-            // Wheelie exit: brake pressed on ADC2 -> return to throttle mode.
-            // Seed throttle_current from balance_current so the motor output does not
-            // drop abruptly. The regen requested via ADC2 will then ramp in naturally
-            // through the IIR filter in STATE_THROTTLE.
-            if (d->footpad.adc2 > 0.05f) {
+            // Wheelie exit: brake pressed on ADC2 -> begin exit sequence.
+            // If ramp time is configured, gradually lower the setpoint to 0 while
+            // the balance loop keeps running. Otherwise exit instantly.
+            if (d->footpad.adc2 > 0.05f && !d->wheelie_exiting) {
+                if (d->wheelie_exit_step_size > 0.0f) {
+                    // Start ramping the setpoint down to 0
+                    d->wheelie_exiting = true;
+                    d->setpoint_target = 0;
+                } else {
+                    // Instant exit
+                    state_throttle(&d->state);
+                    d->throttle_current = d->balance_current;
+                    d->wheelie_entry_armed = false;
+                    break;
+                }
+            }
+
+            // Wheelie exit ramp: once setpoint has reached 0, transition to throttle
+            if (d->wheelie_exiting && d->setpoint_target_interpolated <= 0.5f) {
                 state_throttle(&d->state);
                 d->throttle_current = d->balance_current;
                 d->wheelie_entry_armed = false;
+                d->wheelie_exiting = false;
                 break;
             }
 
             // Calculate setpoint and interpolation
             calculate_setpoint_target(d);
-            rate_limitf(
-                &d->setpoint_target_interpolated,
-                d->setpoint_target,
-                get_setpoint_adjustment_step_size(d)
-            );
+            float step_size = d->wheelie_exiting ? d->wheelie_exit_step_size
+                                                 : get_setpoint_adjustment_step_size(d);
+            rate_limitf(&d->setpoint_target_interpolated, d->setpoint_target, step_size);
             d->setpoint = d->setpoint_target_interpolated;
 
             remote_update(&d->remote, &d->state, &d->float_conf);
@@ -1102,12 +1127,10 @@ static void refloat_thd(void *arg) {
             float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
                 ? 1.0f / d->float_conf.throttle_adc_voltage_max
                 : 1.0f;
-            float throttle = adc1 > 0.05f
-                ? fminf((adc1 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
-                : 0.0f;
-            float brake = adc2 > 0.05f
-                ? fminf((adc2 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
-                : 0.0f;
+            float throttle =
+                adc1 > 0.05f ? fminf((adc1 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f) : 0.0f;
+            float brake =
+                adc2 > 0.05f ? fminf((adc2 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f) : 0.0f;
 
             float target_current;
             if (brake > 0.0f) {
@@ -1139,7 +1162,7 @@ static void refloat_thd(void *arg) {
             // Wheelie entry: engage balance loop when pitch approaches the target angle
             if (d->wheelie_entry_armed &&
                 d->imu.balance_pitch >=
-                (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
+                    (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
                 engage(d);
                 // Set centering target to the wheelie balance point, not 0
                 d->setpoint_target = d->float_conf.wheelie_target_pitch;

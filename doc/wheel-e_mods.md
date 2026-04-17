@@ -75,6 +75,7 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 |---|---|---|---|
 | `wheelie_target_pitch` | `float` | 20° | Pitch angle the balance loop holds in wheelie mode |
 | `wheelie_entry_threshold` | `float` | 5° | Degrees below target at which balance loop engages |
+| `wheelie_exit_ramp_time` | `float` | 1.0s | Time to ramp setpoint from wheelie pitch to 0° on exit (0 = instant) |
 | `throttle_current_max` | `float` | 20A | Max motor current from ADC1 throttle |
 | `throttle_brake_current_max` | `float` | 15A | Max regen current from ADC2 brake |
 | `throttle_adc_voltage_max` | `float` | 3.2V | ADC voltage that maps to 100% throttle/brake |
@@ -85,12 +86,14 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 - Added serialization order entries after `remote_throttle_grace_period`
 - Added two new UI separator sections under the **Tune** subgroup:
   - **ADC Throttle (Bike Mode)**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_adc_voltage_max`, `throttle_adc_filter`
-  - **Wheelie (Bike Mode)**: `wheelie_target_pitch`, `wheelie_entry_threshold`
+  - **Wheelie (Bike Mode)**: `wheelie_target_pitch`, `wheelie_entry_threshold`, `wheelie_exit_ramp_time`
 
 ### `src/data.h`
 - Added `float throttle_current` to the `Data` struct — holds the IIR-filtered current output in `STATE_THROTTLE`
 - Added `float throttle_adc1_filtered` and `float throttle_adc2_filtered` — IIR-filtered ADC inputs for noise reduction
 - Added `bool wheelie_entry_armed` — hysteresis flag preventing immediate wheelie re-entry after a brake exit
+- Added `bool wheelie_exiting` — flag indicating the wheelie exit ramp is in progress
+- Added `float wheelie_exit_step_size` — precomputed degrees-per-iteration for the exit ramp
 
 ### `src/motor_control.c`
 - `motor_control_apply()`: `STATE_THROTTLE` is now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
@@ -120,19 +123,39 @@ After IMU calibration, the bike goes directly to normal riding mode. There is no
 After `check_faults()` stops the balance loop (e.g., pitch fault from landing), the state machine previously landed in `STATE_READY`. For the bike it redirects to `STATE_THROTTLE` so the rider can continue riding on two wheels after the front wheel touches down.
 
 #### `STATE_RUNNING` — wheelie exit on brake
-Added at the top of the running loop (before setpoint calculation):
+When the brake is pressed (ADC2 > 5%), the exit behaviour depends on `wheelie_exit_ramp_time`:
+
+**With ramp (ramp time > 0):** The balance loop stays active but `setpoint_target` is set to 0°. The existing `rate_limitf` interpolation ramps `setpoint_target_interpolated` down at a rate of `wheelie_target_pitch / (ramp_time × hertz)` degrees per iteration. Once the interpolated setpoint reaches ≤ 0.5°, the state transitions to `STATE_THROTTLE` with a bumpless handover.
+
+**Without ramp (ramp time = 0):** Instant exit, same as the previous behaviour.
+
 ```c
-// Wheelie exit: brake pressed on ADC2 -> return to throttle mode.
-// Seed throttle_current from balance_current so the motor output does not
-// drop abruptly. The regen requested via ADC2 will then ramp in naturally
-// through the IIR filter in STATE_THROTTLE.
-if (d->footpad.adc2 > 0.05f) {
+// Wheelie exit: brake pressed on ADC2 -> begin exit sequence.
+if (d->footpad.adc2 > 0.05f && !d->wheelie_exiting) {
+    if (d->wheelie_exit_step_size > 0.0f) {
+        // Start ramping the setpoint down to 0
+        d->wheelie_exiting = true;
+        d->setpoint_target = 0;
+    } else {
+        // Instant exit
+        state_throttle(&d->state);
+        d->throttle_current = d->balance_current;
+        d->wheelie_entry_armed = false;
+        break;
+    }
+}
+
+// Wheelie exit ramp: once setpoint has reached 0, transition to throttle
+if (d->wheelie_exiting && d->setpoint_target_interpolated <= 0.5f) {
     state_throttle(&d->state);
     d->throttle_current = d->balance_current;
     d->wheelie_entry_armed = false;
+    d->wheelie_exiting = false;
     break;
 }
 ```
+
+During the ramp, `calculate_setpoint_target()` skips overwriting `setpoint_target` back to `wheelie_target_pitch` when `wheelie_exiting` is true. The `rate_limitf` step size is switched from the normal `get_setpoint_adjustment_step_size()` to `wheelie_exit_step_size`.
 
 #### New `STATE_THROTTLE` case
 
@@ -154,12 +177,10 @@ case STATE_THROTTLE: {
         ? 1.0f / d->float_conf.throttle_adc_voltage_max
         : 1.0f;
     // 5% deadband with remapping: [0.05, 1.0] -> [0.0, 1.0]
-    float throttle = adc1 > 0.05f
-        ? fminf((adc1 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
-        : 0.0f;
-    float brake = adc2 > 0.05f
-        ? fminf((adc2 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f)
-        : 0.0f;
+    float throttle =
+        adc1 > 0.05f ? fminf((adc1 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f) : 0.0f;
+    float brake =
+        adc2 > 0.05f ? fminf((adc2 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f) : 0.0f;
 
     float target_current;
     if (brake > 0.0f) {
@@ -191,7 +212,7 @@ case STATE_THROTTLE: {
     // Wheelie entry: pitch within threshold of target → engage balance loop
     if (d->wheelie_entry_armed &&
         d->imu.balance_pitch >=
-        (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
+            (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
         engage(d);
         d->setpoint_target = d->float_conf.wheelie_target_pitch;
         // Bumpless transfer: seed balance_current from the live throttle current so
@@ -238,6 +259,7 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg -> Remote | Remote Type (`inputtilt_remote_type`) | `NONE` | PPM pin is used for the beeper; do not configure PPM remote |
 |Refloat Cfg -> Tune | Wheelie Target Pitch (`wheelie_target_pitch`) | Tune per bike | Physical balance point — start at 20° and adjust |
 |Refloat Cfg -> Tune | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `4–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
+|Refloat Cfg -> Tune | Wheelie Exit Ramp Time (`wheelie_exit_ramp_time`) | `1.0` | Seconds to gently lower the front wheel; 0 = instant drop to throttle mode |
 |Refloat Cfg -> Tune | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
 |Refloat Cfg -> Tune | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
 |Refloat Cfg -> Tune | Throttle ADC Full-Scale Voltage (`throttle_adc_voltage_max`) | `3.2` | Voltage at which throttle/brake reads as 100%; adjust to match your throttle hardware |

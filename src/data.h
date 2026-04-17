@@ -105,6 +105,8 @@ typedef struct {
     float throttle_adc1_filtered;
     float throttle_adc2_filtered;
     bool wheelie_entry_armed;
+    bool wheelie_exiting;
+    float wheelie_exit_step_size;
 
     float setpoint, setpoint_target, setpoint_target_interpolated;
     float noseangling_interpolated;
