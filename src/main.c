@@ -245,6 +245,7 @@ static void reset_runtime_vars(Data *d) {
     booster_reset(&d->booster);
 
     d->balance_current = 0;
+    d->wheelie_entry_armed = true;
 
     // Set values for startup
     d->setpoint = d->imu.balance_pitch;
@@ -878,6 +879,7 @@ static void refloat_thd(void *arg) {
             if (d->footpad.adc2 > 0.05f) {
                 state_throttle(&d->state);
                 d->throttle_current = d->balance_current;
+                d->wheelie_entry_armed = false;
                 break;
             }
 
@@ -1125,8 +1127,18 @@ static void refloat_thd(void *arg) {
                 motor_control_request_current(&d->motor_control, d->throttle_current);
             }
 
+            // Wheelie re-entry hysteresis: pitch must drop below threshold before
+            // we allow re-entering wheelie, preventing immediate re-engage after
+            // a brief brake tap.
+            if (!d->wheelie_entry_armed) {
+                if (d->imu.balance_pitch < d->float_conf.wheelie_entry_threshold) {
+                    d->wheelie_entry_armed = true;
+                }
+            }
+
             // Wheelie entry: engage balance loop when pitch approaches the target angle
-            if (d->imu.balance_pitch >=
+            if (d->wheelie_entry_armed &&
+                d->imu.balance_pitch >=
                 (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
                 engage(d);
                 // Set centering target to the wheelie balance point, not 0

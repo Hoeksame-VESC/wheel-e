@@ -90,6 +90,7 @@ Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_u
 ### `src/data.h`
 - Added `float throttle_current` to the `Data` struct — holds the IIR-filtered current output in `STATE_THROTTLE`
 - Added `float throttle_adc1_filtered` and `float throttle_adc2_filtered` — IIR-filtered ADC inputs for noise reduction
+- Added `bool wheelie_entry_armed` — hysteresis flag preventing immediate wheelie re-entry after a brake exit
 
 ### `src/motor_control.c`
 - `motor_control_apply()`: `STATE_THROTTLE` is now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
@@ -128,6 +129,7 @@ Added at the top of the running loop (before setpoint calculation):
 if (d->footpad.adc2 > 0.05f) {
     state_throttle(&d->state);
     d->throttle_current = d->balance_current;
+    d->wheelie_entry_armed = false;
     break;
 }
 ```
@@ -178,8 +180,17 @@ case STATE_THROTTLE: {
         motor_control_request_current(&d->motor_control, d->throttle_current);
     }
 
+    // Wheelie re-entry hysteresis: pitch must drop below threshold before
+    // we allow re-entering wheelie.
+    if (!d->wheelie_entry_armed) {
+        if (d->imu.balance_pitch < d->float_conf.wheelie_entry_threshold) {
+            d->wheelie_entry_armed = true;
+        }
+    }
+
     // Wheelie entry: pitch within threshold of target → engage balance loop
-    if (d->imu.balance_pitch >=
+    if (d->wheelie_entry_armed &&
+        d->imu.balance_pitch >=
         (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
         engage(d);
         d->setpoint_target = d->float_conf.wheelie_target_pitch;
@@ -200,6 +211,17 @@ case STATE_THROTTLE: {
 The fix seeds `balance_current` from `throttle_current` immediately after `engage()` returns. Because `STATE_RUNNING` integrates `balance_current` with an 0.8/0.2 IIR (`balance_current = balance_current * 0.8 + new_current * 0.2`), starting from the live throttle value gives the PID integral time to wind up to the correct steady-state current before the seed decays. No I-term preload is required — the seeded `balance_current` provides enough continuity.
 
 The PID setpoint itself is not an issue: `reset_runtime_vars()` seeds `setpoint` and `setpoint_target_interpolated` to the **current** pitch, so the first PID error is near zero regardless of how far the target pitch is from the entry pitch. The centering ramp (`SAT_CENTERING`) then moves the setpoint toward `wheelie_target_pitch` at `startup_step_size`.
+
+### Why wheelie re-entry uses hysteresis
+Without hysteresis, a brief brake tap exits wheelie mode (`STATE_RUNNING` → `STATE_THROTTLE`) but the pitch is still near the entry threshold. On the very next control loop iteration the entry condition is met again and the bike immediately re-enters wheelie, making it impossible to exit with a short brake press.
+
+The fix adds a `wheelie_entry_armed` flag:
+1. On wheelie exit (brake press), the flag is cleared (`false`)
+2. While `false`, the wheelie entry check is skipped regardless of pitch
+3. The flag is re-armed (`true`) only when pitch drops below `wheelie_entry_threshold` (near level)
+4. On startup, the flag is initialized to `true` via `reset_runtime_vars()` so the first entry works
+
+This forces the rider to bring the front wheel down past the threshold before wheelie mode can engage again, giving a clean and intentional transition.
 
 ---
 
