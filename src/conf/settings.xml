@@ -1549,7 +1549,7 @@ p, li { white-space: pre-wrap; }
             <minDouble>1</minDouble>
             <showDisplay>0</showDisplay>
             <stepDouble>0.5</stepDouble>
-            <valDouble>5</valDouble>
+            <valDouble>3</valDouble>
             <vTxDoubleScale>100</vTxDoubleScale>
             <suffix> °</suffix>
             <vTx>7</vTx>
@@ -1633,7 +1633,7 @@ p, li { white-space: pre-wrap; }
             <editorDecimalsDouble>2</editorDecimalsDouble>
             <editorScale>1</editorScale>
             <editAsPercentage>0</editAsPercentage>
-            <maxDouble>3.3</maxDouble>
+            <maxDouble>10</maxDouble>
             <minDouble>0.1</minDouble>
             <showDisplay>0</showDisplay>
             <stepDouble>0.1</stepDouble>
@@ -1659,7 +1659,7 @@ p, li { white-space: pre-wrap; }
             <minDouble>0</minDouble>
             <showDisplay>0</showDisplay>
             <stepDouble>0.05</stepDouble>
-            <valDouble>0.5</valDouble>
+            <valDouble>0.1</valDouble>
             <vTxDoubleScale>100</vTxDoubleScale>
             <suffix></suffix>
             <vTx>7</vTx>
@@ -4247,17 +4247,22 @@ p, li { white-space: pre-wrap; }
         <group>
             <groupName>General</groupName>
             <subgroup>
-                <subgroupName>Tune</subgroupName>
+                <subgroupName>Bike</subgroupName>
                 <subgroupParams>
-                    <param>::sep::ADC Throttle (Bike Mode)</param>
+                    <param>::sep::Throttle mode</param>
                     <param>throttle_current_max</param>
                     <param>throttle_brake_current_max</param>
                     <param>throttle_adc_voltage_max</param>
                     <param>throttle_adc_filter</param>
-                    <param>::sep::Wheelie (Bike Mode)</param>
+                    <param>::sep::Wheelie mode</param>
                     <param>wheelie_target_pitch</param>
                     <param>wheelie_entry_threshold</param>
                     <param>wheelie_exit_ramp_time</param>
+                </subgroupParams>
+            </subgroup>
+            <subgroup>
+                <subgroupName>Tune</subgroupName>
+                <subgroupParams>
                     <param>::sep::PID</param>
                     <param>kp</param>
                     <param>kp2</param>

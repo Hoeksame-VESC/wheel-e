@@ -1114,40 +1114,41 @@ static void refloat_thd(void *arg) {
         case STATE_THROTTLE: {
             // Normal two-wheel riding: ADC1 = throttle, ADC2 = regen brake
 
-            // Low-pass filter raw ADC inputs to reduce noise
-            float filter = d->float_conf.throttle_adc_filter;
-            d->throttle_adc1_filtered =
-                d->throttle_adc1_filtered * filter + d->footpad.adc1 * (1.0f - filter);
-            d->throttle_adc2_filtered =
-                d->throttle_adc2_filtered * filter + d->footpad.adc2 * (1.0f - filter);
-
-            float adc1 = d->throttle_adc1_filtered;
-            float adc2 = d->throttle_adc2_filtered;
-
+            // Scale raw ADC to 0.0–1.0 range based on configured full-scale voltage
             float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
                 ? 1.0f / d->float_conf.throttle_adc_voltage_max
                 : 1.0f;
-            float throttle =
-                adc1 > 0.05f ? fminf((adc1 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f) : 0.0f;
-            float brake =
-                adc2 > 0.05f ? fminf((adc2 - 0.05f) / (1.0f - 0.05f) * adc_scale, 1.0f) : 0.0f;
+            float throttle = fminf(d->footpad.adc1 * adc_scale, 1.0f);
+            float brake = fminf(d->footpad.adc2 * adc_scale, 1.0f);
 
-            float target_current;
-            if (brake > 0.0f) {
-                // Regen braking: store negative internally for IIR smoothing
-                target_current = -brake * d->float_conf.throttle_brake_current_max;
+            // Low-pass filter to smooth ADC noise
+            float filter = d->float_conf.throttle_adc_filter;
+            d->throttle_adc1_filtered =
+                d->throttle_adc1_filtered * filter + throttle * (1.0f - filter);
+            d->throttle_adc2_filtered =
+                d->throttle_adc2_filtered * filter + brake * (1.0f - filter);
+
+            // Brake takes priority over throttle, but only above the 1A
+            // cutoff to avoid ADC noise on an unused brake input blocking throttle.
+            float brake_current =
+                d->throttle_adc2_filtered * d->float_conf.throttle_brake_current_max;
+            float throttle_current = d->throttle_adc1_filtered * d->float_conf.throttle_current_max;
+
+            if (brake_current > 1.0f) {
+                d->throttle_current = -brake_current;
             } else {
-                target_current = throttle * d->float_conf.throttle_current_max;
+                d->throttle_current = throttle_current;
             }
 
-            // Smooth the output with a 10% IIR filter
-            d->throttle_current = d->throttle_current * 0.9f + target_current * 0.1f;
-
-            // Use mc_set_brake_current for regen so VESC never runs in reverse
-            if (d->throttle_current < 0.0f) {
+            // Ignore current requests below 1A to avoid energizing the motor
+            // from ADC noise. Request 0 current explicitly so motor_control_apply()
+            // releases the motor instead of falling through to brake logic.
+            if (d->throttle_current < -1.0f) {
                 motor_control_request_brake_current(&d->motor_control, -d->throttle_current);
-            } else {
+            } else if (d->throttle_current > 1.0f) {
                 motor_control_request_current(&d->motor_control, d->throttle_current);
+            } else {
+                motor_control_request_current(&d->motor_control, 0.0f);
             }
 
             // Wheelie re-entry hysteresis: pitch must drop below threshold before

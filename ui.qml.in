@@ -7262,7 +7262,7 @@ Item {
             Layout.fillWidth: true
             font.pixelSize: 0.2 * unit
             horizontalAlignment: Text.AlignHCenter
-            text: "Refloat v{{VERSION}}"
+            text: "Wheel-E v{{VERSION}}"
         }
     }
 }

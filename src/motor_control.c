@@ -25,6 +25,8 @@ void motor_control_init(MotorControl *mc) {
     mc->disabled = false;
     mc->current_requested = false;
     mc->requested_current = 0.0f;
+    mc->brake_current_requested = false;
+    mc->requested_brake_current = 0.0f;
     mc->click_counter = 0;
     mc->brake_timer = 0.0f;
     mc->parking_brake_active = false;
@@ -101,8 +103,10 @@ void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const
 
     // BEWARE: Some sort of motor control must always be set before returning from this function
     if (mc->current_requested) {
-        // Keep modulation on for 50ms in case we request close-to-0 current
-        VESC_IF->mc_set_current_off_delay(0.05f);
+        if (mc->requested_current != 0.0f) {
+            // Keep modulation on for 50ms in case we request close-to-0 current
+            VESC_IF->mc_set_current_off_delay(0.05f);
+        }
         VESC_IF->mc_set_current(mc->requested_current);
     } else if (mc->brake_current_requested) {
         VESC_IF->mc_set_brake_current(mc->requested_brake_current);
