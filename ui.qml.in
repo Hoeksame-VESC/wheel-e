@@ -6358,7 +6358,15 @@ Item {
                             height: width
 
                             // Positive = throttle (ADC1), negative = brake (ADC2)
-                            property real throttleAdcMax: packageConfig.pkgConfig.getParamDouble("throttle_adc_voltage_max")
+                            property real throttleAdcMax: 0
+
+                            Connections {
+                                target: packageConfig
+                                function onUpdate() {
+                                    throttleGauge.throttleAdcMax = packageConfig.pkgConfig.getParamDouble("throttle_adc_voltage_max");
+                                }
+                            }
+
                             property real throttlePct: {
                                 var adc1 = state.rtData["footpad.adc1"];
                                 var adc2 = state.rtData["footpad.adc2"];
