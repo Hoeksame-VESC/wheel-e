@@ -314,7 +314,15 @@ typedef struct {
     float wheelie_exit_ramp_time;
     float throttle_current_max;
     float throttle_brake_current_max;
-    float throttle_adc_voltage_max;
+    float throttle_current_deadband;
+    float throttle_adc1_voltage_min;
+    float throttle_adc1_voltage_center;
+    float throttle_adc1_voltage_max;
+    bool throttle_adc1_invert;
+    float throttle_adc2_voltage_min;
+    float throttle_adc2_voltage_center;
+    float throttle_adc2_voltage_max;
+    bool throttle_adc2_invert;
     float throttle_adc_filter;
 
     CfgMeta meta;

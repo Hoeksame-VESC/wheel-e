@@ -16,8 +16,9 @@ Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The packa
 * Make sure that the built in ADC app is not enabled. (App Cfg -> General -> App to Use: `No App` or `UART`)
 
 ## Full code documentation
-[code change doc](doc/wheel-e_mods.md)
-[ReFloat README](ReFloat_README.md)
+[Wheel-E code modifications](doc/wheel-e_mods.md) This document describes the code changes made to ReFloat to implement the Wheel-E functionality. It includes explanations of the new state machine logic, parameter handling, and UI changes.
+
+[ReFloat README](ReFloat_README.md) This is the original README for the ReFloat project, which provides an overview of the base code that Wheel-E is built upon. It includes setup instructions, functionality summaries, and documentation links for ReFloat itself.
 
 ## Project status
 As of 15.04.2026: Some code implemented. Compiles and runs. Tested handheld on a VESCed Onewheel Pint. Bike not yet fabricated.

@@ -100,10 +100,13 @@ typedef struct {
 
     float balance_current;
 
-    // Bike throttle mode: smoothed current output from ADC1 throttle / ADC2 brake
+    // Bike throttle mode: smoothed ADC inputs and combined throttle value (-1 to 1)
     float throttle_current;
     float throttle_adc1_filtered;
     float throttle_adc2_filtered;
+    float throttle_adc1_mapped;
+    float throttle_adc2_mapped;
+    float throttle_val;
     bool wheelie_entry_armed;
     bool wheelie_exiting;
     float wheelie_exit_step_size;

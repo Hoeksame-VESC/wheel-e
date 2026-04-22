@@ -11,11 +11,21 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
 ## Change Specification (as provided)
 
 ### 1. Throttle and brake inputs
-- **ADC1** = analog throttle (0–1 mapped to 0–`throttle_current_max`)
-- **ADC2** = analog regenerative brake (0–1 mapped to 0–`throttle_brake_current_max`)
-- ADC voltage is normalized by `throttle_adc_voltage_max` so the configured voltage maps to 100% (values above are clamped to 1.0)
-- Normalized inputs are smoothed with a configurable IIR low-pass filter (`throttle_adc_filter`) to reduce noise
-- A 1A deadband is applied to the final current command: requests below 1A (throttle or brake) are treated as zero so ADC noise does not energize the motor. Brake takes priority over throttle only above the 1A cutoff.
+- **ADC1** = analog throttle, **ADC2** = analog brake
+- Raw ADC voltages are first smoothed with a configurable IIR low-pass filter (`throttle_adc_filter`)
+- Each ADC channel is then mapped from voltage to a 0–1 (0-100%) range using three calibration points:
+  - `voltage_min` → 0 (0% current)
+  - `voltage_center` → 0.5 (50% current)
+  - `voltage_max` → 1 (100% current)
+  - Piecewise linear interpolation between min↔center (0–0.5) and center↔max (0.5–1.0)
+  - Values at or below min clamp to 0; values at or above max clamp to 1
+- Each ADC channel has an `invert` boolean that flips the mapping (min→1, max→0)
+- ADC1 and ADC2 are combined into a single `throttle_val` in the range -1 to +1:
+  - Brake (ADC2) has absolute priority: any non-zero brake produces a negative value
+  - Throttle (ADC1) only contributes when brake is exactly 0
+- `throttle_val` is multiplied by `throttle_current_max` (positive) or `throttle_brake_current_max` (negative) to produce a current command
+- A configurable current deadband (`throttle_current_deadband`, default 1A) suppresses commands below the threshold to prevent ADC noise from energizing the motor
+- `throttle_val` is exposed as a realtime data item for UI display
 
 ### 2. Wheelie entry trigger
 - The balance/wheelie loop engages automatically when pitch rises to within `wheelie_entry_threshold` degrees below `wheelie_target_pitch`
@@ -24,7 +34,7 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
 - Throttle input is **ignored** while in wheelie/balance mode; only leaning affects speed
 
 ### 3. Wheelie exit
-- Pressing the brake (ADC2 > 5%) while in wheelie mode triggers an exit sequence:
+- Pressing the brake (ADC2 mapped > 0) while in wheelie mode triggers an exit sequence:
   - **With exit ramp** (`wheelie_exit_ramp_time` > 0): the balance loop stays active and the pitch setpoint ramps from `wheelie_target_pitch` down to 0° over the configured time, gently lowering the front wheel. Once the setpoint reaches ~0°, the state transitions to `STATE_THROTTLE` with `throttle_current` seeded from `balance_current` for a bumpless handover.
   - **Without exit ramp** (`wheelie_exit_ramp_time` = 0): instant exit to `STATE_THROTTLE`, seeding `throttle_current` from `balance_current`.
 - **Re-entry hysteresis**: after exiting wheelie, re-entry is blocked until pitch drops below `wheelie_entry_threshold` (near level). This prevents a brief brake tap from immediately re-engaging wheelie.
@@ -59,8 +69,10 @@ A forced negative exit-brake pulse is not needed: the PID was already applying p
 
 Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_update()` to always return `FS_BOTH`, satisfying any remaining footpad checks in `can_engage()` and `check_faults()`, while the raw float values are still available for throttle/brake use.
 
-### Why the 5% deadband was removed
-An earlier version subtracted a 5% deadband from the ADC reading and rescaled the remainder. This was replaced by a 1A deadband on the final current command. The ADC-level deadband interacted poorly with `throttle_adc_voltage_max` scaling: at high full-scale voltages the 5% threshold became a large absolute voltage, while at low voltages it ate into the usable range. Applying the deadband after scaling to amps (1A cutoff) makes the threshold independent of the ADC voltage configuration and directly meaningful in terms of motor behaviour.
+### Why ADC deadband is voltage-domain with a current-domain cutoff
+Each ADC channel uses a three-point voltage calibration (min/center/max) for deadband and range mapping. Voltages at or below `voltage_min` read as 0%; voltages at or above `voltage_max` read as 100%. This makes the deadband boundaries explicit in hardware voltage terms and independent of the current scaling.
+
+On top of this, a configurable current deadband (`throttle_current_deadband`) suppresses final current commands below the threshold. This catches residual ADC noise that survives the voltage mapping and prevents it from energizing the motor. The default is 1A.
 
 ---
 
@@ -75,7 +87,7 @@ An earlier version subtracted a 5% deadband from the ADC reading and rescaled th
 - Added `case STATE_THROTTLE` to `state_compat()` returning `16` (new compat ID)
 
 ### `src/conf/datatypes.h`
-- Added 7 new fields to `RefloatConfig` (before `CfgMeta meta`):
+- Added fields to `RefloatConfig` (before `CfgMeta meta`):
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -84,22 +96,35 @@ An earlier version subtracted a 5% deadband from the ADC reading and rescaled th
 | `wheelie_exit_ramp_time` | `float` | 1.0s | Time to ramp setpoint from wheelie pitch to 0° on exit (0 = instant) |
 | `throttle_current_max` | `float` | 20A | Max motor current from ADC1 throttle |
 | `throttle_brake_current_max` | `float` | 15A | Max regen current from ADC2 brake |
-| `throttle_adc_voltage_max` | `float` | 3.2V | ADC voltage that maps to 100% throttle/brake |
-| `throttle_adc_filter` | `float` | 0.1 | IIR low-pass filter coefficient for ADC inputs (0 = off, 0.99 = heavy) |
+| `throttle_current_deadband` | `float` | 1.0A | Current commands below this are suppressed to zero |
+| `throttle_adc1_voltage_min` | `float` | 0.5V | ADC1 voltage mapping to 0% current |
+| `throttle_adc1_voltage_center` | `float` | 1.65V | ADC1 voltage mapping to 50% current |
+| `throttle_adc1_voltage_max` | `float` | 3.2V | ADC1 voltage mapping to 100% current |
+| `throttle_adc1_invert` | `bool` | false | Invert ADC1 so min voltage maps to 100% and max to 0% |
+| `throttle_adc2_voltage_min` | `float` | 0.5V | ADC2 voltage mapping to 0% current |
+| `throttle_adc2_voltage_center` | `float` | 1.65V | ADC2 voltage mapping to 50% current |
+| `throttle_adc2_voltage_max` | `float` | 3.2V | ADC2 voltage mapping to 100% current |
+| `throttle_adc2_invert` | `bool` | false | Invert ADC2 so min voltage maps to 100% and max to 0% |
+| `throttle_adc_filter` | `float` | 0.1 | IIR low-pass filter coefficient for raw ADC voltages (0 = off, 0.99 = heavy) |
 
 ### `src/conf/settings.xml`
-- Added full parameter definitions for all 7 new fields (type, range, step, unit, description)
+- Added full parameter definitions for all new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
 - Added a new **Bike** subgroup under the **General** group with two UI separator sections:
-  - **Throttle mode**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_adc_voltage_max`, `throttle_adc_filter`
+  - **Throttle mode**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_current_deadband`, `throttle_adc1_voltage_min`, `throttle_adc1_voltage_center`, `throttle_adc1_voltage_max`, `throttle_adc1_invert`, `throttle_adc2_voltage_min`, `throttle_adc2_voltage_center`, `throttle_adc2_voltage_max`, `throttle_adc2_invert`, `throttle_adc_filter`
   - **Wheelie mode**: `wheelie_target_pitch`, `wheelie_entry_threshold`, `wheelie_exit_ramp_time`
 
 ### `src/data.h`
 - Added `float throttle_current` to the `Data` struct — holds the current output in `STATE_THROTTLE`
-- Added `float throttle_adc1_filtered` and `float throttle_adc2_filtered` — IIR-filtered ADC inputs for noise reduction
+- Added `float throttle_adc1_filtered` and `float throttle_adc2_filtered` — IIR-filtered raw ADC voltages
+- Added `float throttle_adc1_mapped` and `float throttle_adc2_mapped` — calibrated 0–1 values after min/center/max mapping and optional inversion
+- Added `float throttle_val` — combined throttle/brake value (-1 to +1) exposed to UI via realtime data
 - Added `bool wheelie_entry_armed` — hysteresis flag preventing immediate wheelie re-entry after a brake exit
 - Added `bool wheelie_exiting` — flag indicating the wheelie exit ramp is in progress
 - Added `float wheelie_exit_step_size` — precomputed degrees-per-iteration for the exit ramp
+
+### `src/rt_data.h`
+- Added `S(throttle_val)` to the `RT_DATA_ITEMS` macro — sends `d->throttle_val` as a realtime data item to the UI
 
 ### `src/motor_control.c`
 - `motor_control_apply()`: `STATE_THROTTLE` is now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
@@ -129,17 +154,17 @@ After IMU calibration, the bike goes directly to normal riding mode. There is no
 After `check_faults()` stops the balance loop (e.g., pitch fault from landing), the state machine previously landed in `STATE_READY`. For the bike it redirects to `STATE_THROTTLE` with `throttle_current` zeroed so the motor is released cleanly rather than carrying through whatever current the balance loop was commanding.
 
 #### `STATE_RUNNING` — wheelie exit on brake
-When the brake is pressed (ADC2 > 5%), the exit behaviour depends on `wheelie_exit_ramp_time`:
+When the brake is pressed (ADC2 mapped > 0), the exit behaviour depends on `wheelie_exit_ramp_time`:
 
-**With ramp (ramp time > 0):** The balance loop stays active but `setpoint_target` is set to 0°. The existing `rate_limitf` interpolation ramps `setpoint_target_interpolated` down at a rate of `wheelie_target_pitch / (ramp_time × hertz)` degrees per iteration. Once the interpolated setpoint reaches ≤ 0.5°, the state transitions to `STATE_THROTTLE` with a bumpless handover.
+**With ramp (ramp time > 0):** The balance loop stays active but `setpoint_target` is set to 0°. The existing `rate_limitf` interpolation ramps `setpoint_target_interpolated` down at a rate of `wheelie_target_pitch / (ramp_time × hertz)` degrees per iteration. Once the interpolated setpoint reaches ≤ `wheelie_entry_threshold`, the state transitions to `STATE_THROTTLE` with a bumpless handover.
 
-**Without ramp (ramp time = 0):** Instant exit, same as the previous behaviour.
+**Without ramp (ramp time = 0):** Instant exit.
 
 ```c
 // Wheelie exit: brake pressed on ADC2 -> begin exit sequence.
 // If ramp time is configured, gradually lower the setpoint to 0 while
 // the balance loop keeps running. Otherwise exit instantly.
-if (d->footpad.adc2 > 0.05f && !d->wheelie_exiting) {
+if (d->throttle_adc2_mapped > 0.0f && !d->wheelie_exiting) {
     if (d->wheelie_exit_step_size > 0.0f) {
         // Start ramping the setpoint down to 0
         d->wheelie_exiting = true;
@@ -153,8 +178,8 @@ if (d->footpad.adc2 > 0.05f && !d->wheelie_exiting) {
     }
 }
 
-// Wheelie exit ramp: once setpoint has reached 0, transition to throttle
-if (d->wheelie_exiting && d->setpoint_target_interpolated <= 0.5f) {
+// Wheelie exit ramp: once setpoint has reached entry threshold, transition to throttle
+if (d->wheelie_exiting && d->setpoint_target_interpolated <= d->float_conf.wheelie_entry_threshold) {
     state_throttle(&d->state);
     d->throttle_current = d->balance_current;
     d->wheelie_entry_armed = false;
@@ -165,47 +190,37 @@ if (d->wheelie_exiting && d->setpoint_target_interpolated <= 0.5f) {
 
 During the ramp, `calculate_setpoint_target()` skips overwriting `setpoint_target` back to `wheelie_target_pitch` when `wheelie_exiting` is true. The `rate_limitf` step size is switched from the normal `get_setpoint_adjustment_step_size()` to `wheelie_exit_step_size`.
 
+#### ADC filtering and mapping
+
+ADC filtering and piecewise min/center/max mapping runs every cycle **before** the state machine switch, so the mapped values (`d->throttle_adc1_mapped`, `d->throttle_adc2_mapped`) are available in both `STATE_THROTTLE` and `STATE_RUNNING`. Raw ADC voltages are smoothed with an IIR low-pass filter, then mapped through per-channel min/center/max calibration to a 0–1 range with optional inversion.
+
 #### New `STATE_THROTTLE` case
 
-ADC readings are first scaled by `throttle_adc_voltage_max` so that the configured voltage equals 100% input (clamped to 1.0), then smoothed with an IIR low-pass filter. A 1A deadband on the final current command prevents ADC noise from energizing the motor.
+The pre-computed mapped values are combined into a single `throttle_val` (-1 to +1) where brake has absolute priority. The final current command is suppressed below a configurable deadband to prevent ADC noise from energizing the motor.
 
 ```c
 case STATE_THROTTLE: {
-    // Normal two-wheel riding: ADC1 = throttle, ADC2 = regen brake
+    // Normal two-wheel riding: ADC1 = throttle, ADC2 = brake
+    // ADC filtering and mapping is done before the switch.
 
-    // Scale raw ADC to 0.0–1.0 range based on configured full-scale voltage
-    float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
-        ? 1.0f / d->float_conf.throttle_adc_voltage_max
-        : 1.0f;
-    float throttle = fminf(d->footpad.adc1 * adc_scale, 1.0f);
-    float brake = fminf(d->footpad.adc2 * adc_scale, 1.0f);
-
-    // Low-pass filter to smooth ADC noise
-    float filter = d->float_conf.throttle_adc_filter;
-    d->throttle_adc1_filtered =
-        d->throttle_adc1_filtered * filter + throttle * (1.0f - filter);
-    d->throttle_adc2_filtered =
-        d->throttle_adc2_filtered * filter + brake * (1.0f - filter);
-
-    // Brake takes priority over throttle, but only above the 1A
-    // cutoff to avoid ADC noise on an unused brake input blocking throttle.
-    float brake_current =
-        d->throttle_adc2_filtered * d->float_conf.throttle_brake_current_max;
-    float throttle_current = d->throttle_adc1_filtered * d->float_conf.throttle_current_max;
-
-    if (brake_current > 1.0f) {
-        d->throttle_current = -brake_current;
+    // Combine into a single -1..1 value: brake wins if non-zero
+    if (d->throttle_adc2_mapped > 0.0f) {
+        d->throttle_val = clampf(-d->throttle_adc2_mapped, -1.0f, 0.0f);
     } else {
-        d->throttle_current = throttle_current;
+        d->throttle_val = clampf(d->throttle_adc1_mapped, 0.0f, 1.0f);
     }
-
-    // Ignore current requests below 1A to avoid energizing the motor
-    // from ADC noise. Request 0 current explicitly so motor_control_apply()
-    // releases the motor instead of falling through to brake logic.
-    if (d->throttle_current < -1.0f) {
-        motor_control_request_brake_current(&d->motor_control, -d->throttle_current);
-    } else if (d->throttle_current > 1.0f) {
-        motor_control_request_current(&d->motor_control, d->throttle_current);
+    float current = 0.0f;
+    if (d->throttle_val < 0) {
+        current = d->throttle_val * d->float_conf.throttle_brake_current_max;
+    } else if (d->throttle_val > 0) {
+        current = d->throttle_val * d->float_conf.throttle_current_max;
+    }
+    // set current request. Ignore current below deadband
+    float deadband = d->float_conf.throttle_current_deadband;
+    if (current < -deadband) {
+        motor_control_request_brake_current(&d->motor_control, -current);
+    } else if (current > deadband) {
+        motor_control_request_current(&d->motor_control, current);
     } else {
         motor_control_request_current(&d->motor_control, 0.0f);
     }
@@ -236,7 +251,9 @@ case STATE_THROTTLE: {
 
 **Regen braking:** Brake current is routed through `motor_control_request_brake_current()`, which calls `mc_set_brake_current()` with a positive value. This always regenerates energy regardless of motor direction and cannot reverse the motor. Using `mc_set_current()` with a negative value would instead command reverse torque.
 
-**1A deadband:** Both throttle and brake commands below 1A are suppressed to zero. This prevents residual ADC voltage on an unused input (e.g., a brake potentiometer at rest reading 0.02V) from producing a small but nonzero current command that would keep the motor energized. The 1A threshold also means brake only takes priority over throttle when the brake current is meaningful — a trace brake reading won't block throttle input.
+**Brake priority:** ADC2 (brake) has absolute priority over ADC1 (throttle). Any non-zero brake input produces a negative `throttle_val`, which maps to regen current. Throttle only contributes when the brake mapped value is exactly zero.
+
+**Current deadband:** Both throttle and brake current commands below `throttle_current_deadband` (default 1A) are suppressed to zero. This prevents residual ADC voltage on an unused input from producing a small but nonzero current command that would keep the motor energized.
 
 #### Bumpless transfer on wheelie entry
 
@@ -265,19 +282,27 @@ When deploying on a bike, set the following in the VESC Tool UI:
 
 |Path| Parameter | Recommended value | Reason |
 |---|---|---|---|
-|Refloat Cfg -> Specs | ADC1 Switch Voltage (`fault_adc1`) | `0` | Disables footpad switch logic; ADC1 raw value still readable for throttle |
-|Refloat Cfg -> Specs | ADC2 Switch Voltage (`fault_adc2`) | `0` | Disables footpad switch logic; ADC2 raw value still readable for brake |
-|App Cfg -> General | App to use | `No App` | Disables the VESC built in ADC app. Prevents interference with the current commands. Alternatively set to `UART` |
-|Refloat Cfg -> Stop | Pitch Axis Fault Cutoff (`fault_pitch`) | `60–80°` | Must be above wheelie angle to avoid spurious pitch faults during balance |
-|Refloat Cfg -> Startup | Startup Pitch Axis Angle Tolerance (`startup_pitch_tolerance`) | `80°` | Not strictly needed (no READY state used), but avoids any residual engage guard |
-|Refloat Cfg -> Remote | Remote Type (`inputtilt_remote_type`) | `NONE` | PPM pin is used for the beeper; do not configure PPM remote |
-|Refloat Cfg -> Bike | Wheelie Target Pitch (`wheelie_target_pitch`) | Tune per bike | Physical balance point — start at 20° and adjust |
-|Refloat Cfg -> Bike | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `2–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
-|Refloat Cfg -> Bike | Wheelie Exit Ramp Time (`wheelie_exit_ramp_time`) | `1.0` | Seconds to gently lower the front wheel; 0 = instant drop to throttle mode |
-|Refloat Cfg -> Bike | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
-|Refloat Cfg -> Bike | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
-|Refloat Cfg -> Bike | Throttle ADC Full-Scale Voltage (`throttle_adc_voltage_max`) | `3.2` | Voltage at which throttle/brake reads as 100%; adjust to match your throttle hardware |
-|Refloat Cfg -> Bike | Throttle ADC Filter (`throttle_adc_filter`) | `0.1` | Low-pass filter strength for ADC noise; 0 = off, higher = smoother but more lag |
+|Refloat Cfg → Specs | ADC1 Switch Voltage (`fault_adc1`) | `0` | Disables footpad switch logic; ADC1 raw value still readable for throttle |
+|Refloat Cfg → Specs | ADC2 Switch Voltage (`fault_adc2`) | `0` | Disables footpad switch logic; ADC2 raw value still readable for brake |
+|App Cfg → General | App to use | `No App` | Disables the VESC built in ADC app. Prevents interference with the current commands. Alternatively set to `UART` |
+|Refloat Cfg → Bike | Wheelie Target Pitch (`wheelie_target_pitch`) | Tune per bike | Physical balance point — start at 20° and adjust |
+|Refloat Cfg → Bike | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `2–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
+|Refloat Cfg → Bike | Wheelie Exit Ramp Time (`wheelie_exit_ramp_time`) | `1.0` | Seconds to gently lower the front wheel; 0 = instant drop to throttle mode |
+|Refloat Cfg → Bike | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
+|Refloat Cfg → Bike | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
+|Refloat Cfg → Bike | Throttle Current Deadband (`throttle_current_deadband`) | `1.0` | Current commands below this (A) are suppressed to zero |
+|Refloat Cfg → Bike | Throttle ADC1 Voltage Min (`throttle_adc1_voltage_min`) | `0.5` | ADC1 voltage at 0% throttle; adjust to match hardware rest voltage |
+|Refloat Cfg → Bike | Throttle ADC1 Voltage Center (`throttle_adc1_voltage_center`) | `1.65` | ADC1 voltage at 50% current |
+|Refloat Cfg → Bike | Throttle ADC1 Voltage Max (`throttle_adc1_voltage_max`) | `3.2` | ADC1 voltage at 100% throttle; adjust to match hardware full-scale |
+|Refloat Cfg → Bike | Throttle ADC1 Invert (`throttle_adc1_invert`) | `false` | Flip ADC1 direction if wired in reverse |
+|Refloat Cfg → Bike | Brake ADC2 Voltage Min (`throttle_adc2_voltage_min`) | `0.5` | ADC2 voltage at 0% brake |
+|Refloat Cfg → Bike | Brake ADC2 Voltage Center (`throttle_adc2_voltage_center`) | `1.65` | ADC2 voltage at 50% current |
+|Refloat Cfg → Bike | Brake ADC2 Voltage Max (`throttle_adc2_voltage_max`) | `3.2` | ADC2 voltage at 100% brake |
+|Refloat Cfg → Bike | Brake ADC2 Invert (`throttle_adc2_invert`) | `false` | Flip ADC2 direction if wired in reverse |
+|Refloat Cfg → Bike | Throttle ADC Filter (`throttle_adc_filter`) | `0.1` | Low-pass filter strength for raw ADC voltages; 0 = off, higher = smoother but more lag |
+|Refloat Cfg → Stop | Pitch Axis Fault Cutoff (`fault_pitch`) | `60–80°` | Must be above wheelie angle to avoid spurious pitch faults during balance |
+|Refloat Cfg → Startup | Startup Pitch Axis Angle Tolerance (`startup_pitch_tolerance`) | `80°` | Not strictly needed (no READY state used), but avoids any residual engage guard |
+|Refloat Cfg → Remote | Remote Type (`inputtilt_remote_type`) | `NONE` | PPM pin is used for the beeper; do not configure PPM remote |
 
 ---
 
@@ -287,10 +312,17 @@ When deploying on a bike, set the following in the VESC Tool UI:
 STARTUP
    │ (IMU ready)
    ▼
+ ┌─────────────────────────────────────────────────────────┐
+ │  Every cycle (before switch):                           │
+ │    IIR low-pass filter on raw ADC voltages              │
+ │    ADC1 → piecewise mapped (min/center/max → 0..1)      │
+ │    ADC2 → piecewise mapped (min/center/max → 0..1)      │
+ └─────────────────────────────────────────────────────────┘
+   │
+   ▼
 STATE_THROTTLE ◄───────────────────────────────────────────┐
-   │  ADC inputs filtered (IIR low-pass)                   │
-   │  ADC1 → throttle current (5% deadband, remapped)      │
-   │  ADC2 → regen brake current (5% deadband, remapped)   │
+   │  Brake priority: adc2_mapped > 0 → throttle_val < 0   │
+   │  Current deadband: |current| < deadband → 0           │
    │                                                       │
    │  Re-entry blocked until pitch < entry_threshold       │
    │  (hysteresis re-arm)                                  │
@@ -299,14 +331,15 @@ STATE_THROTTLE ◄────────────────────�
    ▼                                                       │
 STATE_RUNNING (wheelie balance loop)                       │
    │  pitch PID holds wheelie_target_pitch                 │
-   │  ADC1 ignored / ADC2 ignored for speed control        │
+   │  Throttle/brake inputs ignored for speed control      │
    │                                                       │
-   ├── ADC2 > 5% ─┬─ ramp_time > 0:                        │
-   │              │   setpoint ramps to 0° (balance        │
-   │              │   loop active), then ─────────────────►│
-   │              │                                        │
-   │              └─ ramp_time = 0:                        │
-   │                  instant exit ───────────────────────►│
+   ├── adc2_mapped > 0 ┬─ ramp_time > 0:                   │
+   │                   │   setpoint ramps toward 0°        │
+   │                   │   (balance loop active), exits    │
+   │                   │   at entry_threshold ────────────►│
+   │                   │                                   │
+   │                   └─ ramp_time = 0:                   │
+   │                       instant exit ──────────────────►│
    │                                                       │
    └── fault (pitch/roll/temp/voltage) ──► STATE_THROTTLE ─┘
 ```

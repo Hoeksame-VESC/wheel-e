@@ -2102,6 +2102,8 @@ Item {
     // "#788554",
     // "#734828"
     property var plotSeriesMetaData: [
+        ["throttle_val", {"name": "Bike Throttle/Brake", "color": "#0088bb", "visible": true}],
+        
         ["motor.erpm", {"name": "ERPM", "color": "#469138", "visible": true}],
         ["motor.duty_cycle", {"name": "Duty Cycle", "color": "#e3ac34", "visible": true}],
         ["motor.current", {"name": "Motor Current", "color": "#e33421", "visible": true}],
@@ -6358,23 +6360,7 @@ Item {
                             height: width
 
                             // Positive = throttle (ADC1), negative = brake (ADC2)
-                            property real throttleAdcMax: 0
-
-                            Connections {
-                                target: packageConfig
-                                function onUpdate() {
-                                    throttleGauge.throttleAdcMax = packageConfig.pkgConfig.getParamDouble("throttle_adc_voltage_max");
-                                }
-                            }
-
-                            property real throttlePct: {
-                                var adc1 = state.rtData["footpad.adc1"];
-                                var adc2 = state.rtData["footpad.adc2"];
-                                var adcMax = throttleAdcMax > 0 ? throttleAdcMax : 3.3;
-                                if (adc1 > 0.05) return Math.min(adc1 / adcMax * 100, 100);
-                                if (adc2 > 0.05) return Math.max(-adc2 / adcMax * 100, -100);
-                                return 0;
-                            }
+                            property real throttlePct: (state.rtData["throttle_val"] || 0) * 100
 
                             NText {
                                 id: throttleDialLabel

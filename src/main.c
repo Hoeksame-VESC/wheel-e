@@ -843,6 +843,56 @@ static void refloat_thd(void *arg) {
         }
 
         // Control Loop State Logic
+        // ADC filtering and mapping runs every cycle so mapped values
+        // are available in both STATE_THROTTLE and STATE_RUNNING.
+        {
+            float filter = d->float_conf.throttle_adc_filter;
+            d->throttle_adc1_filtered =
+                d->throttle_adc1_filtered * filter + d->footpad.adc1 * (1.0f - filter);
+            d->throttle_adc2_filtered =
+                d->throttle_adc2_filtered * filter + d->footpad.adc2 * (1.0f - filter);
+
+            // Map filtered voltage to 0.0–1.0 using min/center/max calibration.
+            // min -> 0, center -> 0.5, max -> 1, clamped to [0, 1].
+            {
+                float v = d->throttle_adc1_filtered;
+                float vmin = d->float_conf.throttle_adc1_voltage_min;
+                float vctr = d->float_conf.throttle_adc1_voltage_center;
+                float vmax = d->float_conf.throttle_adc1_voltage_max;
+                if (v <= vmin) {
+                    d->throttle_adc1_mapped = 0.0f;
+                } else if (v <= vctr) {
+                    d->throttle_adc1_mapped = 0.5f * (v - vmin) / fmaxf(vctr - vmin, 0.001f);
+                } else if (v <= vmax) {
+                    d->throttle_adc1_mapped = 0.5f + 0.5f * (v - vctr) / fmaxf(vmax - vctr, 0.001f);
+                } else {
+                    d->throttle_adc1_mapped = 1.0f;
+                }
+                if (d->float_conf.throttle_adc1_invert) {
+                    d->throttle_adc1_mapped = 1.0f - d->throttle_adc1_mapped;
+                }
+            }
+
+            {
+                float v = d->throttle_adc2_filtered;
+                float vmin = d->float_conf.throttle_adc2_voltage_min;
+                float vctr = d->float_conf.throttle_adc2_voltage_center;
+                float vmax = d->float_conf.throttle_adc2_voltage_max;
+                if (v <= vmin) {
+                    d->throttle_adc2_mapped = 0.0f;
+                } else if (v <= vctr) {
+                    d->throttle_adc2_mapped = 0.5f * (v - vmin) / fmaxf(vctr - vmin, 0.001f);
+                } else if (v <= vmax) {
+                    d->throttle_adc2_mapped = 0.5f + 0.5f * (v - vctr) / fmaxf(vmax - vctr, 0.001f);
+                } else {
+                    d->throttle_adc2_mapped = 1.0f;
+                }
+                if (d->float_conf.throttle_adc2_invert) {
+                    d->throttle_adc2_mapped = 1.0f - d->throttle_adc2_mapped;
+                }
+            }
+        }
+
         switch (d->state.state) {
         case (STATE_STARTUP):
             if (VESC_IF->imu_startup_done()) {
@@ -887,7 +937,7 @@ static void refloat_thd(void *arg) {
             // Wheelie exit: brake pressed on ADC2 -> begin exit sequence.
             // If ramp time is configured, gradually lower the setpoint to 0 while
             // the balance loop keeps running. Otherwise exit instantly.
-            if (d->footpad.adc2 > 0.05f && !d->wheelie_exiting) {
+            if (d->throttle_adc2_mapped > 0.0f && !d->wheelie_exiting) {
                 if (d->wheelie_exit_step_size > 0.0f) {
                     // Start ramping the setpoint down to 0
                     d->wheelie_exiting = true;
@@ -901,8 +951,9 @@ static void refloat_thd(void *arg) {
                 }
             }
 
-            // Wheelie exit ramp: once setpoint has reached 0, transition to throttle
-            if (d->wheelie_exiting && d->setpoint_target_interpolated <= 0.5f) {
+            // Wheelie exit ramp: once setpoint has reached entry threshold, transition to throttle
+            if (d->wheelie_exiting &&
+                d->setpoint_target_interpolated <= d->float_conf.wheelie_entry_threshold) {
                 state_throttle(&d->state);
                 d->throttle_current = d->balance_current;
                 d->wheelie_entry_armed = false;
@@ -1112,42 +1163,30 @@ static void refloat_thd(void *arg) {
             do_rc_move(d);
             break;
         case STATE_THROTTLE: {
-            // Normal two-wheel riding: ADC1 = throttle, ADC2 = regen brake
+            // Normal two-wheel riding: ADC1 = throttle, ADC2 = brake
+            // ADC filtering and mapping is done before the switch.
 
-            // Scale raw ADC to 0.0–1.0 range based on configured full-scale voltage
-            float adc_scale = d->float_conf.throttle_adc_voltage_max > 0.0f
-                ? 1.0f / d->float_conf.throttle_adc_voltage_max
-                : 1.0f;
-            float throttle = fminf(d->footpad.adc1 * adc_scale, 1.0f);
-            float brake = fminf(d->footpad.adc2 * adc_scale, 1.0f);
-
-            // Low-pass filter to smooth ADC noise
-            float filter = d->float_conf.throttle_adc_filter;
-            d->throttle_adc1_filtered =
-                d->throttle_adc1_filtered * filter + throttle * (1.0f - filter);
-            d->throttle_adc2_filtered =
-                d->throttle_adc2_filtered * filter + brake * (1.0f - filter);
-
-            // Brake takes priority over throttle, but only above the 1A
-            // cutoff to avoid ADC noise on an unused brake input blocking throttle.
-            float brake_current =
-                d->throttle_adc2_filtered * d->float_conf.throttle_brake_current_max;
-            float throttle_current = d->throttle_adc1_filtered * d->float_conf.throttle_current_max;
-
-            if (brake_current > 1.0f) {
-                d->throttle_current = -brake_current;
+            // Combine into a single -1..1 value: brake wins if non-zero
+            if (d->throttle_adc2_mapped > 0.0f) {
+                d->throttle_val = clampf(-d->throttle_adc2_mapped, -1.0f, 0.0f);
             } else {
-                d->throttle_current = throttle_current;
+                d->throttle_val = clampf(d->throttle_adc1_mapped, 0.0f, 1.0f);
+            }
+            float current = 0.0f;
+            if (d->throttle_val < 0) {
+                current = d->throttle_val * d->float_conf.throttle_brake_current_max;
+            } else if (d->throttle_val > 0) {
+                current = d->throttle_val * d->float_conf.throttle_current_max;
             }
 
-            // Ignore current requests below 1A to avoid energizing the motor
-            // from ADC noise. Request 0 current explicitly so motor_control_apply()
-            // releases the motor instead of falling through to brake logic.
-            if (d->throttle_current < -1.0f) {
-                motor_control_request_brake_current(&d->motor_control, -d->throttle_current);
-            } else if (d->throttle_current > 1.0f) {
-                motor_control_request_current(&d->motor_control, d->throttle_current);
+            // set current request. Ignore current below deadband
+            float deadband = d->float_conf.throttle_current_deadband;
+            if (current < -deadband) {
+                motor_control_request_brake_current(&d->motor_control, -current);
+            } else if (current > deadband) {
+                motor_control_request_current(&d->motor_control, current);
             } else {
+                // We need to request current every cycle to prevent breaking
                 motor_control_request_current(&d->motor_control, 0.0f);
             }
 

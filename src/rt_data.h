@@ -51,7 +51,8 @@
     S(imu.roll)                                                                                    \
     S(footpad.adc1)                                                                                \
     S(footpad.adc2)                                                                                \
-    S(remote.input)
+    S(remote.input)                                                                                \
+    S(throttle_val)
 
 #define RT_DATA_RUNTIME_ITEMS(S, R)                                                                \
     R(setpoint)                                                                                    \
