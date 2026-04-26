@@ -1576,50 +1576,6 @@ p, li { white-space: pre-wrap; }
             <suffix> s</suffix>
             <vTx>7</vTx>
         </wheelie_exit_ramp_time>
-        <throttle_current_max>
-            <longName>Throttle Current Max</longName>
-            <type>1</type>
-            <transmittable>1</transmittable>
-            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Maximum motor current (A) applied when ADC1 throttle is fully pressed during normal (two-wheel) riding.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
-            <cDefine>CFG_DFLT_THROTTLE_CURRENT_MAX</cDefine>
-            <editorDecimalsDouble>1</editorDecimalsDouble>
-            <editorScale>1</editorScale>
-            <editAsPercentage>0</editAsPercentage>
-            <maxDouble>200</maxDouble>
-            <minDouble>0</minDouble>
-            <showDisplay>0</showDisplay>
-            <stepDouble>5</stepDouble>
-            <valDouble>20</valDouble>
-            <vTxDoubleScale>10</vTxDoubleScale>
-            <suffix> A</suffix>
-            <vTx>7</vTx>
-        </throttle_current_max>
-        <throttle_brake_current_max>
-            <longName>Throttle Brake Current Max</longName>
-            <type>1</type>
-            <transmittable>1</transmittable>
-            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Maximum regenerative braking current (A) applied when ADC2 brake is fully pressed during normal (two-wheel) riding.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
-            <cDefine>CFG_DFLT_THROTTLE_BRAKE_CURRENT_MAX</cDefine>
-            <editorDecimalsDouble>1</editorDecimalsDouble>
-            <editorScale>1</editorScale>
-            <editAsPercentage>0</editAsPercentage>
-            <maxDouble>200</maxDouble>
-            <minDouble>0</minDouble>
-            <showDisplay>0</showDisplay>
-            <stepDouble>5</stepDouble>
-            <valDouble>15</valDouble>
-            <vTxDoubleScale>10</vTxDoubleScale>
-            <suffix> A</suffix>
-            <vTx>7</vTx>
-        </throttle_brake_current_max>
         <throttle_current_deadband>
             <longName>Throttle Current Deadband</longName>
             <type>1</type>
@@ -4276,8 +4232,6 @@ p, li { white-space: pre-wrap; }
         <ser>wheelie_target_pitch</ser>
         <ser>wheelie_entry_threshold</ser>
         <ser>wheelie_exit_ramp_time</ser>
-        <ser>throttle_current_max</ser>
-        <ser>throttle_brake_current_max</ser>
         <ser>throttle_current_deadband</ser>
         <ser>throttle_adc1_voltage_min</ser>
         <ser>throttle_adc1_voltage_center</ser>
@@ -4414,8 +4368,6 @@ p, li { white-space: pre-wrap; }
                 <subgroupName>Bike</subgroupName>
                 <subgroupParams>
                     <param>::sep::Throttle mode</param>
-                    <param>throttle_current_max</param>
-                    <param>throttle_brake_current_max</param>
                     <param>throttle_current_deadband</param>
                     <param>throttle_adc1_voltage_min</param>
                     <param>throttle_adc1_voltage_center</param>

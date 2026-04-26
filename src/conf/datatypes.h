@@ -312,8 +312,6 @@ typedef struct {
     float wheelie_target_pitch;
     float wheelie_entry_threshold;
     float wheelie_exit_ramp_time;
-    float throttle_current_max;
-    float throttle_brake_current_max;
     float throttle_current_deadband;
     float throttle_adc1_voltage_min;
     float throttle_adc1_voltage_center;

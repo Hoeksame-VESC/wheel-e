@@ -23,7 +23,7 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
 - ADC1 and ADC2 are combined into a single `throttle_val` in the range -1 to +1:
   - Brake (ADC2) has absolute priority: any non-zero brake produces a negative value
   - Throttle (ADC1) only contributes when brake is exactly 0
-- `throttle_val` is multiplied by `throttle_current_max` (positive) or `throttle_brake_current_max` (negative) to produce a current command
+- `throttle_val` is multiplied by the Motor Cfg max current or brake current to produce a current command
 - A configurable current deadband (`throttle_current_deadband`, default 1A) suppresses commands below the threshold to prevent ADC noise from energizing the motor
 - `throttle_val` is exposed as a realtime data item for UI display
 
@@ -94,8 +94,6 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 | `wheelie_target_pitch` | `float` | 20° | Pitch angle the balance loop holds in wheelie mode |
 | `wheelie_entry_threshold` | `float` | 3° | Degrees below target at which balance loop engages |
 | `wheelie_exit_ramp_time` | `float` | 1.0s | Time to ramp setpoint from wheelie pitch to 0° on exit (0 = instant) |
-| `throttle_current_max` | `float` | 20A | Max motor current from ADC1 throttle |
-| `throttle_brake_current_max` | `float` | 15A | Max regen current from ADC2 brake |
 | `throttle_current_deadband` | `float` | 1.0A | Current commands below this are suppressed to zero |
 | `throttle_adc1_voltage_min` | `float` | 0.5V | ADC1 voltage mapping to 0% current |
 | `throttle_adc1_voltage_center` | `float` | 1.65V | ADC1 voltage mapping to 50% current |
@@ -111,7 +109,7 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 - Added full parameter definitions for all new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
 - Added a new **Bike** subgroup under the **General** group with two UI separator sections:
-  - **Throttle mode**: `throttle_current_max`, `throttle_brake_current_max`, `throttle_current_deadband`, `throttle_adc1_voltage_min`, `throttle_adc1_voltage_center`, `throttle_adc1_voltage_max`, `throttle_adc1_invert`, `throttle_adc2_voltage_min`, `throttle_adc2_voltage_center`, `throttle_adc2_voltage_max`, `throttle_adc2_invert`, `throttle_adc_filter`
+  - **Throttle mode**: `throttle_current_deadband`, `throttle_adc1_voltage_min`, `throttle_adc1_voltage_center`, `throttle_adc1_voltage_max`, `throttle_adc1_invert`, `throttle_adc2_voltage_min`, `throttle_adc2_voltage_center`, `throttle_adc2_voltage_max`, `throttle_adc2_invert`, `throttle_adc_filter`
   - **Wheelie mode**: `wheelie_target_pitch`, `wheelie_entry_threshold`, `wheelie_exit_ramp_time`
 
 ### `src/data.h`
@@ -211,9 +209,9 @@ case STATE_THROTTLE: {
     }
     float current = 0.0f;
     if (d->throttle_val < 0) {
-        current = d->throttle_val * d->float_conf.throttle_brake_current_max;
+        current = d->throttle_val * d->motor.current_min;
     } else if (d->throttle_val > 0) {
-        current = d->throttle_val * d->float_conf.throttle_current_max;
+        current = d->throttle_val * d->motor.current_max;
     }
     // set current request. Ignore current below deadband
     float deadband = d->float_conf.throttle_current_deadband;
@@ -285,11 +283,10 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg → Specs | ADC1 Switch Voltage (`fault_adc1`) | `0` | Disables footpad switch logic; ADC1 raw value still readable for throttle |
 |Refloat Cfg → Specs | ADC2 Switch Voltage (`fault_adc2`) | `0` | Disables footpad switch logic; ADC2 raw value still readable for brake |
 |App Cfg → General | App to use | `No App` | Disables the VESC built in ADC app. Prevents interference with the current commands. Alternatively set to `UART` |
+|Motor Cfg → General → Current | Max current | Safe value | This is the max motor current. Set this low when you start to tune to prevent damage |
 |Refloat Cfg → Bike | Wheelie Target Pitch (`wheelie_target_pitch`) | Tune per bike | Physical balance point — start at 20° and adjust |
 |Refloat Cfg → Bike | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `2–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
 |Refloat Cfg → Bike | Wheelie Exit Ramp Time (`wheelie_exit_ramp_time`) | `1.0` | Seconds to gently lower the front wheel; 0 = instant drop to throttle mode |
-|Refloat Cfg → Bike | Throttle Current Max (`throttle_current_max`) | Per motor spec | Limit to safe value for your motor and battery |
-|Refloat Cfg → Bike | Throttle Brake Current Max (`throttle_brake_current_max`) | Per motor spec | Limit to safe regen value |
 |Refloat Cfg → Bike | Throttle Current Deadband (`throttle_current_deadband`) | `1.0` | Current commands below this (A) are suppressed to zero |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Min (`throttle_adc1_voltage_min`) | `0.5` | ADC1 voltage at 0% throttle; adjust to match hardware rest voltage |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Center (`throttle_adc1_voltage_center`) | `1.65` | ADC1 voltage at 50% current |

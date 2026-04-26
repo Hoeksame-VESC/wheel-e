@@ -1174,9 +1174,9 @@ static void refloat_thd(void *arg) {
             }
             float current = 0.0f;
             if (d->throttle_val < 0) {
-                current = d->throttle_val * d->float_conf.throttle_brake_current_max;
+                current = d->throttle_val * d->motor.current_min;
             } else if (d->throttle_val > 0) {
-                current = d->throttle_val * d->float_conf.throttle_current_max;
+                current = d->throttle_val * d->motor.current_max;
             }
 
             // set current request. Ignore current below deadband
