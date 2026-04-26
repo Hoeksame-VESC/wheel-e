@@ -14,6 +14,7 @@ Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The packa
 * Configure parameters under ReFloat Cfg -> Bike.
 * Disable the foot sensors by setting ADC Switch voltage to 0v (ReFloat Cfg -> Spec -> ADC1&2 Switch voltage: `0.0v`)
 * Make sure that the built in ADC app is not enabled. (App Cfg -> General -> App to Use: `No App` or `UART`)
+* To be safe, start with low motor current setting! (Motor Cfg -> General -> Current -> Motor Current Max)
 
 # Refloat
 
