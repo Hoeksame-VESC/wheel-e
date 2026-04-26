@@ -91,9 +91,9 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `wheelie_target_pitch` | `float` | 20° | Pitch angle the balance loop holds in wheelie mode |
+| `wheelie_target_pitch` | `float` | 25° | Pitch angle the balance loop holds in wheelie mode |
 | `wheelie_entry_threshold` | `float` | 3° | Degrees below target at which balance loop engages |
-| `wheelie_exit_ramp_time` | `float` | 1.0s | Time to ramp setpoint from wheelie pitch to 0° on exit (0 = instant) |
+| `wheelie_exit_ramp_time` | `float` | 0s | Time to ramp setpoint from wheelie pitch to 0° on exit (0 = instant) |
 | `throttle_current_deadband` | `float` | 1.0A | Current commands below this are suppressed to zero |
 | `throttle_adc1_voltage_min` | `float` | 0.5V | ADC1 voltage mapping to 0% current |
 | `throttle_adc1_voltage_center` | `float` | 1.65V | ADC1 voltage mapping to 50% current |
@@ -285,7 +285,7 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Motor Cfg → General → Current | Max current | Safe value | This is the max motor current. Set this low when you start to tune to prevent damage |
 |Refloat Cfg → Bike | Wheelie Target Pitch (`wheelie_target_pitch`) | Tune per bike | Physical balance point — start at 20° and adjust |
 |Refloat Cfg → Bike | Wheelie Entry Threshold (`wheelie_entry_threshold`) | `2–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
-|Refloat Cfg → Bike | Wheelie Exit Ramp Time (`wheelie_exit_ramp_time`) | `1.0` | Seconds to gently lower the front wheel; 0 = instant drop to throttle mode |
+|Refloat Cfg → Bike | Wheelie Exit Ramp Time (`wheelie_exit_ramp_time`) | `0.3-0.6` | Seconds to gently lower the front wheel; 0 = instant drop to throttle mode |
 |Refloat Cfg → Bike | Throttle Current Deadband (`throttle_current_deadband`) | `1.0` | Current commands below this (A) are suppressed to zero |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Min (`throttle_adc1_voltage_min`) | `0.5` | ADC1 voltage at 0% throttle; adjust to match hardware rest voltage |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Center (`throttle_adc1_voltage_center`) | `1.65` | ADC1 voltage at 50% current |
