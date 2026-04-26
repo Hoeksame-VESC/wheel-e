@@ -318,7 +318,6 @@ typedef struct {
     float throttle_adc1_voltage_max;
     bool throttle_adc1_invert;
     float throttle_adc2_voltage_min;
-    float throttle_adc2_voltage_center;
     float throttle_adc2_voltage_max;
     bool throttle_adc2_invert;
     float throttle_adc_filter;

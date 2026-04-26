@@ -876,16 +876,13 @@ static void refloat_thd(void *arg) {
             {
                 float v = d->throttle_adc2_filtered;
                 float vmin = d->float_conf.throttle_adc2_voltage_min;
-                float vctr = d->float_conf.throttle_adc2_voltage_center;
                 float vmax = d->float_conf.throttle_adc2_voltage_max;
                 if (v <= vmin) {
                     d->throttle_adc2_mapped = 0.0f;
-                } else if (v <= vctr) {
-                    d->throttle_adc2_mapped = 0.5f * (v - vmin) / fmaxf(vctr - vmin, 0.001f);
-                } else if (v <= vmax) {
-                    d->throttle_adc2_mapped = 0.5f + 0.5f * (v - vctr) / fmaxf(vmax - vctr, 0.001f);
-                } else {
+                } else if (v >= vmax) {
                     d->throttle_adc2_mapped = 1.0f;
+                } else {
+                    d->throttle_adc2_mapped = (v - vmin) / fmaxf(vmax - vmin, 0.001f);
                 }
                 if (d->float_conf.throttle_adc2_invert) {
                     d->throttle_adc2_mapped = 1.0f - d->throttle_adc2_mapped;

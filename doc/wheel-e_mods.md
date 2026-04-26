@@ -13,9 +13,9 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
 ### 1. Throttle and brake inputs
 - **ADC1** = analog throttle, **ADC2** = analog brake
 - Raw ADC voltages are first smoothed with a configurable IIR low-pass filter (`throttle_adc_filter`)
-- Each ADC channel is then mapped from voltage to a 0–1 (0-100%) range using three calibration points:
+- Each ADC channel is then mapped from voltage to a 0–1 (0-100%) range using the following calibration points:
   - `voltage_min` → 0 (0% current)
-  - `voltage_center` → 0.5 (50% current)
+  - `voltage_center` → 0.5 (50% current) (Only ADC1)
   - `voltage_max` → 1 (100% current)
   - Piecewise linear interpolation between min↔center (0–0.5) and center↔max (0.5–1.0)
   - Values at or below min clamp to 0; values at or above max clamp to 1
@@ -100,7 +100,6 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 | `throttle_adc1_voltage_max` | `float` | 3.2V | ADC1 voltage mapping to 100% current |
 | `throttle_adc1_invert` | `bool` | false | Invert ADC1 so min voltage maps to 100% and max to 0% |
 | `throttle_adc2_voltage_min` | `float` | 0.5V | ADC2 voltage mapping to 0% current |
-| `throttle_adc2_voltage_center` | `float` | 1.65V | ADC2 voltage mapping to 50% current |
 | `throttle_adc2_voltage_max` | `float` | 3.2V | ADC2 voltage mapping to 100% current |
 | `throttle_adc2_invert` | `bool` | false | Invert ADC2 so min voltage maps to 100% and max to 0% |
 | `throttle_adc_filter` | `float` | 0.1 | IIR low-pass filter coefficient for raw ADC voltages (0 = off, 0.99 = heavy) |
@@ -109,7 +108,7 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 - Added full parameter definitions for all new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
 - Added a new **Bike** subgroup under the **General** group with two UI separator sections:
-  - **Throttle mode**: `throttle_current_deadband`, `throttle_adc1_voltage_min`, `throttle_adc1_voltage_center`, `throttle_adc1_voltage_max`, `throttle_adc1_invert`, `throttle_adc2_voltage_min`, `throttle_adc2_voltage_center`, `throttle_adc2_voltage_max`, `throttle_adc2_invert`, `throttle_adc_filter`
+  - **Throttle mode**: `throttle_current_deadband`, `throttle_adc1_voltage_min`, `throttle_adc1_voltage_center`, `throttle_adc1_voltage_max`, `throttle_adc1_invert`, `throttle_adc2_voltage_min`, `throttle_adc2_voltage_max`, `throttle_adc2_invert`, `throttle_adc_filter`
   - **Wheelie mode**: `wheelie_target_pitch`, `wheelie_entry_threshold`, `wheelie_exit_ramp_time`
 
 ### `src/data.h`
@@ -293,7 +292,6 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Max (`throttle_adc1_voltage_max`) | `3.2` | ADC1 voltage at 100% throttle; adjust to match hardware full-scale |
 |Refloat Cfg → Bike | Throttle ADC1 Invert (`throttle_adc1_invert`) | `false` | Flip ADC1 direction if wired in reverse |
 |Refloat Cfg → Bike | Brake ADC2 Voltage Min (`throttle_adc2_voltage_min`) | `0.5` | ADC2 voltage at 0% brake |
-|Refloat Cfg → Bike | Brake ADC2 Voltage Center (`throttle_adc2_voltage_center`) | `1.65` | ADC2 voltage at 50% current |
 |Refloat Cfg → Bike | Brake ADC2 Voltage Max (`throttle_adc2_voltage_max`) | `3.2` | ADC2 voltage at 100% brake |
 |Refloat Cfg → Bike | Brake ADC2 Invert (`throttle_adc2_invert`) | `false` | Flip ADC2 direction if wired in reverse |
 |Refloat Cfg → Bike | Throttle ADC Filter (`throttle_adc_filter`) | `0.1` | Low-pass filter strength for raw ADC voltages; 0 = off, higher = smoother but more lag |

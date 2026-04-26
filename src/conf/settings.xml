@@ -1698,28 +1698,6 @@ p, li { white-space: pre-wrap; }
             <suffix> V</suffix>
             <vTx>7</vTx>
         </throttle_adc2_voltage_min>
-        <throttle_adc2_voltage_center>
-            <longName>Brake ADC2 Voltage Center</longName>
-            <type>1</type>
-            <transmittable>1</transmittable>
-            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;ADC2 voltage that corresponds to the center position, mapping to 50% current.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
-            <cDefine>CFG_DFLT_THROTTLE_ADC2_VOLTAGE_CENTER</cDefine>
-            <editorDecimalsDouble>2</editorDecimalsDouble>
-            <editorScale>1</editorScale>
-            <editAsPercentage>0</editAsPercentage>
-            <maxDouble>10</maxDouble>
-            <minDouble>0</minDouble>
-            <showDisplay>0</showDisplay>
-            <stepDouble>0.05</stepDouble>
-            <valDouble>1.65</valDouble>
-            <vTxDoubleScale>100</vTxDoubleScale>
-            <suffix> V</suffix>
-            <vTx>7</vTx>
-        </throttle_adc2_voltage_center>
         <throttle_adc2_voltage_max>
             <longName>Brake ADC2 Voltage Max</longName>
             <type>1</type>
@@ -4238,7 +4216,6 @@ p, li { white-space: pre-wrap; }
         <ser>throttle_adc1_voltage_max</ser>
         <ser>throttle_adc1_invert</ser>
         <ser>throttle_adc2_voltage_min</ser>
-        <ser>throttle_adc2_voltage_center</ser>
         <ser>throttle_adc2_voltage_max</ser>
         <ser>throttle_adc2_invert</ser>
         <ser>throttle_adc_filter</ser>
@@ -4374,7 +4351,6 @@ p, li { white-space: pre-wrap; }
                     <param>throttle_adc1_voltage_max</param>
                     <param>throttle_adc1_invert</param>
                     <param>throttle_adc2_voltage_min</param>
-                    <param>throttle_adc2_voltage_center</param>
                     <param>throttle_adc2_voltage_max</param>
                     <param>throttle_adc2_invert</param>
                     <param>throttle_adc_filter</param>
