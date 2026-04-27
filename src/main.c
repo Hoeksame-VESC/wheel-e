@@ -950,7 +950,7 @@ static void refloat_thd(void *arg) {
 
             // Wheelie exit ramp: once setpoint has reached entry threshold, transition to throttle
             if (d->wheelie_exiting &&
-                d->setpoint_target_interpolated <= d->float_conf.wheelie_entry_threshold) {
+                d->setpoint_target_interpolated <= d->float_conf.startup_pitch_tolerance) {
                 state_throttle(&d->state);
                 d->throttle_current = d->balance_current;
                 d->wheelie_entry_armed = false;
@@ -1191,7 +1191,7 @@ static void refloat_thd(void *arg) {
             // we allow re-entering wheelie, preventing immediate re-engage after
             // a brief brake tap.
             if (!d->wheelie_entry_armed) {
-                if (d->imu.balance_pitch < d->float_conf.wheelie_entry_threshold) {
+                if (d->imu.balance_pitch < d->float_conf.startup_pitch_tolerance) {
                     d->wheelie_entry_armed = true;
                 }
             }
@@ -1199,7 +1199,7 @@ static void refloat_thd(void *arg) {
             // Wheelie entry: engage balance loop when pitch approaches the target angle
             if (d->wheelie_entry_armed &&
                 d->imu.balance_pitch >=
-                    (d->float_conf.wheelie_target_pitch - d->float_conf.wheelie_entry_threshold)) {
+                    (d->float_conf.wheelie_target_pitch - d->float_conf.startup_pitch_tolerance)) {
                 engage(d);
                 // Set centering target to the wheelie balance point, not 0
                 d->setpoint_target = d->float_conf.wheelie_target_pitch;
