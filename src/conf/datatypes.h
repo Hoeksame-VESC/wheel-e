@@ -34,6 +34,13 @@ typedef enum {
 } ParkingBrakeMode;
 
 typedef enum {
+    WHEELIE_BTN_NONE = 0,
+    WHEELIE_BTN_DOWN,
+    WHEELIE_BTN_UP_DOWN,
+    WHEELIE_BTN_HOLD,
+} WheelieButtonMode;
+
+typedef enum {
     LED_MODE_OFF = 0,
     LED_MODE_INTERNAL = 0x1,
     LED_MODE_EXTERNAL = 0x2,
@@ -310,7 +317,8 @@ typedef struct {
 
     // Bike wheelie mode
     float wheelie_target_pitch;
-    float wheelie_exit_ramp_time;
+    float wheelie_ramp_time;
+    WheelieButtonMode wheelie_button_mode;
     float throttle_current_deadband;
     float throttle_adc1_voltage_min;
     float throttle_adc1_voltage_center;

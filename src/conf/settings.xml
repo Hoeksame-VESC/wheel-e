@@ -1532,28 +1532,49 @@ p, li { white-space: pre-wrap; }
             <suffix> °</suffix>
             <vTx>7</vTx>
         </wheelie_target_pitch>
-        <wheelie_exit_ramp_time>
-            <longName>Wheelie Exit Ramp Time</longName>
+        <wheelie_ramp_time>
+            <longName>Wheelie Ramp Time</longName>
             <type>1</type>
             <transmittable>1</transmittable>
             <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Time in seconds to ramp the balance setpoint from the wheelie target pitch down to 0° when exiting wheelie mode via brake. The balance loop stays active during the ramp, gently lowering the front wheel. Set to 0 for an instant exit (drops directly to throttle mode).&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
-            <cDefine>CFG_DFLT_WHEELIE_EXIT_RAMP_TIME</cDefine>
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Time in seconds to ramp the balance setpoint when entering or exiting wheelie mode. On entry (button-triggered), the setpoint ramps up from the current pitch to the wheelie target pitch. On exit, the setpoint ramps back down to 0° while the balance loop stays active, gently lowering the front wheel. Set to 0 for instant transitions.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_WHEELIE_RAMP_TIME</cDefine>
             <editorDecimalsDouble>1</editorDecimalsDouble>
             <editorScale>1</editorScale>
             <editAsPercentage>0</editAsPercentage>
-            <maxDouble>5.0</maxDouble>
+            <maxDouble>5</maxDouble>
             <minDouble>0</minDouble>
             <showDisplay>0</showDisplay>
             <stepDouble>0.1</stepDouble>
-            <valDouble>0.0</valDouble>
+            <valDouble>0</valDouble>
             <vTxDoubleScale>10</vTxDoubleScale>
             <suffix> s</suffix>
             <vTx>7</vTx>
-        </wheelie_exit_ramp_time>
+        </wheelie_ramp_time>
+        <wheelie_button_mode>
+            <longName>Wheelie Button Mode</longName>
+            <type>4</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Select how the Wheelie button (connected to TX/SCL) behaves.&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;ul style=&quot;margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 1;&quot;&gt;&lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;None: No button attached, or function turned off&lt;/li&gt;
+&lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Down: Press the button to exit wheelie mode&lt;/li&gt;
+&lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Up+Down: Press the button to enter or exit wheelie mode&lt;/li&gt;
+&lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Hold: Press and hold to enter and stay in wheelie. Release to exit&lt;/li&gt;&lt;/ul&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_WHEELIE_BUTTON_MODE</cDefine>
+            <valInt>0</valInt>
+            <enumNames>None</enumNames>
+            <enumNames>Down</enumNames>
+            <enumNames>Up+Down</enumNames>
+            <enumNames>Hold</enumNames>
+        </wheelie_button_mode>
         <throttle_current_deadband>
             <longName>Throttle Current Deadband</longName>
             <type>1</type>
@@ -4186,7 +4207,8 @@ p, li { white-space: pre-wrap; }
         <ser>remote_throttle_current_max</ser>
         <ser>remote_throttle_grace_period</ser>
         <ser>wheelie_target_pitch</ser>
-        <ser>wheelie_exit_ramp_time</ser>
+        <ser>wheelie_ramp_time</ser>
+        <ser>wheelie_button_mode</ser>
         <ser>throttle_current_deadband</ser>
         <ser>throttle_adc1_voltage_min</ser>
         <ser>throttle_adc1_voltage_center</ser>
@@ -4333,7 +4355,8 @@ p, li { white-space: pre-wrap; }
                     <param>throttle_adc_filter</param>
                     <param>::sep::Wheelie mode</param>
                     <param>wheelie_target_pitch</param>
-                    <param>wheelie_exit_ramp_time</param>
+                    <param>wheelie_ramp_time</param>
+                    <param>wheelie_button_mode</param>
                 </subgroupParams>
             </subgroup>
             <subgroup>

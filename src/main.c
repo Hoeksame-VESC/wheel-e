@@ -196,11 +196,16 @@ static void configure(Data *d) {
     d->tiltback_return_step_size = d->float_conf.tiltback_return_speed / d->float_conf.hertz;
 
     // Wheelie exit ramp: degrees per loop iteration to ramp setpoint to 0
-    if (d->float_conf.wheelie_exit_ramp_time > 0.0f) {
+    if (d->float_conf.wheelie_ramp_time > 0.0f) {
         d->wheelie_exit_step_size = d->float_conf.wheelie_target_pitch /
-            (d->float_conf.wheelie_exit_ramp_time * d->float_conf.hertz);
+            (d->float_conf.wheelie_ramp_time * d->float_conf.hertz);
     } else {
         d->wheelie_exit_step_size = 0.0f;
+    }
+
+    // Configure TX pin as digital input with pull-up for wheelie button
+    if (d->float_conf.wheelie_button_mode != WHEELIE_BTN_NONE) {
+        VESC_IF->io_set_mode(VESC_PIN_COMM_TX, VESC_PIN_MODE_INPUT_PULL_UP);
     }
 
     // Feature: Soft Start
@@ -255,6 +260,7 @@ static void reset_runtime_vars(Data *d) {
     d->balance_current = 0;
     d->wheelie_entry_armed = true;
     d->wheelie_exiting = false;
+    d->wheelie_entering = false;
 
     // Set values for startup
     d->setpoint = d->imu.balance_pitch;
@@ -890,6 +896,12 @@ static void refloat_thd(void *arg) {
             }
         }
 
+        // Read wheelie button on TX pin (active low: pulled high, button pulls to GND)
+        if (d->float_conf.wheelie_button_mode != WHEELIE_BTN_NONE) {
+            d->wheelie_btn_prev = d->wheelie_btn_pressed;
+            d->wheelie_btn_pressed = !VESC_IF->io_read(VESC_PIN_COMM_TX);
+        }
+
         switch (d->state.state) {
         case (STATE_STARTUP):
             if (VESC_IF->imu_startup_done()) {
@@ -948,6 +960,30 @@ static void refloat_thd(void *arg) {
                 }
             }
 
+            // Button-triggered wheelie exit
+            if (!d->wheelie_exiting) {
+                bool btn_exit = false;
+                if (d->float_conf.wheelie_button_mode == WHEELIE_BTN_DOWN ||
+                    d->float_conf.wheelie_button_mode == WHEELIE_BTN_UP_DOWN) {
+                    // Rising edge: button was just pressed
+                    btn_exit = d->wheelie_btn_pressed && !d->wheelie_btn_prev;
+                } else if (d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD) {
+                    // Button released while in wheelie mode
+                    btn_exit = !d->wheelie_btn_pressed;
+                }
+                if (btn_exit) {
+                    if (d->wheelie_exit_step_size > 0.0f) {
+                        d->wheelie_exiting = true;
+                        d->setpoint_target = 0;
+                    } else {
+                        state_throttle(&d->state);
+                        d->throttle_current = d->balance_current;
+                        d->wheelie_entry_armed = false;
+                        break;
+                    }
+                }
+            }
+
             // Wheelie exit ramp: once setpoint has reached entry threshold, transition to throttle
             if (d->wheelie_exiting &&
                 d->setpoint_target_interpolated <= d->float_conf.startup_pitch_tolerance) {
@@ -958,10 +994,21 @@ static void refloat_thd(void *arg) {
                 break;
             }
 
+            // Wheelie entry ramp complete: clear flag once setpoint reaches target
+            if (d->wheelie_entering &&
+                d->setpoint_target_interpolated >=
+                    d->float_conf.wheelie_target_pitch - d->float_conf.startup_pitch_tolerance) {
+                d->wheelie_entering = false;
+            }
+
             // Calculate setpoint and interpolation
             calculate_setpoint_target(d);
-            float step_size = d->wheelie_exiting ? d->wheelie_exit_step_size
-                                                 : get_setpoint_adjustment_step_size(d);
+            float step_size;
+            if (d->wheelie_exiting || d->wheelie_entering) {
+                step_size = d->wheelie_exit_step_size;
+            } else {
+                step_size = get_setpoint_adjustment_step_size(d);
+            }
             rate_limitf(&d->setpoint_target_interpolated, d->setpoint_target, step_size);
             d->setpoint = d->setpoint_target_interpolated;
 
@@ -1196,15 +1243,26 @@ static void refloat_thd(void *arg) {
                 }
             }
 
-            // Wheelie entry: engage balance loop when pitch approaches the target angle
+            // Wheelie entry: Up+Down and Hold modes trigger immediately on button press
+            // (rising edge), regardless of current pitch. None and Down use pitch-based
+            // auto-entry as before.
             if (d->wheelie_entry_armed &&
-                d->imu.balance_pitch >=
-                    (d->float_conf.wheelie_target_pitch - d->float_conf.startup_pitch_tolerance)) {
+                (d->float_conf.wheelie_button_mode == WHEELIE_BTN_UP_DOWN ||
+                 d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD) &&
+                d->wheelie_btn_pressed && !d->wheelie_btn_prev) {
                 engage(d);
-                // Set centering target to the wheelie balance point, not 0
                 d->setpoint_target = d->float_conf.wheelie_target_pitch;
-                // Bumpless transfer: seed balance_current from the live throttle current so
-                // the motor output does not drop to zero at the moment of handover.
+                d->balance_current = d->throttle_current;
+                if (d->wheelie_exit_step_size > 0.0f) {
+                    d->wheelie_entering = true;
+                }
+            } else if (d->wheelie_entry_armed &&
+                       (d->float_conf.wheelie_button_mode == WHEELIE_BTN_NONE ||
+                        d->float_conf.wheelie_button_mode == WHEELIE_BTN_DOWN) &&
+                       d->imu.balance_pitch >= (d->float_conf.wheelie_target_pitch -
+                                                d->float_conf.startup_pitch_tolerance)) {
+                engage(d);
+                d->setpoint_target = d->float_conf.wheelie_target_pitch;
                 d->balance_current = d->throttle_current;
             }
             break;

@@ -109,7 +109,10 @@ typedef struct {
     float throttle_val;
     bool wheelie_entry_armed;
     bool wheelie_exiting;
+    bool wheelie_entering;
     float wheelie_exit_step_size;
+    bool wheelie_btn_pressed;
+    bool wheelie_btn_prev;
 
     float setpoint, setpoint_target, setpoint_target_interpolated;
     float noseangling_interpolated;
