@@ -1714,6 +1714,7 @@ Item {
         readonly property int s_Ready: 2
         readonly property int s_Running: 3
         readonly property int s_Throttle: 4
+        readonly property int s_Cruise: 5
         readonly property int s_Connecting: 254
         readonly property int s_Disconnected: 255
 
@@ -1723,6 +1724,7 @@ Item {
             [s_Ready, "READY"],
             [s_Running, "WHEELIE"],
             [s_Throttle, "THROTTLE"],
+            [s_Cruise, "CRUISE"],
             [s_Connecting, "CONNECTING..."],
             [s_Disconnected, "DISCONNECTED"],
         ])
@@ -1846,7 +1848,7 @@ Item {
         property int beepReason: 0
         property string beepReasonString: beepReasonToString.get(beepReason) ?? "unknown (%1)".arg(beepReason)
 
-        property bool pkgStateIsError: ![s_Startup, s_Ready, s_Running, s_Throttle, s_Connecting].includes(pkgState)
+        property bool pkgStateIsError: ![s_Startup, s_Ready, s_Running, s_Throttle, s_Cruise, s_Connecting].includes(pkgState)
         property bool configLoadingError: false
         property bool fatalError: false
 

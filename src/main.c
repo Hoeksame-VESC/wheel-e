@@ -207,6 +207,11 @@ static void configure(Data *d) {
         VESC_IF->io_set_mode(VESC_PIN_COMM_TX, VESC_PIN_MODE_INPUT_PULL_UP);
     }
 
+    // Configure RX pin as digital input with pull-up for cruise control button
+    if (d->float_conf.cruise_enabled) {
+        VESC_IF->io_set_mode(VESC_PIN_COMM_RX, VESC_PIN_MODE_INPUT_PULL_UP);
+    }
+
     // Feature: Soft Start
     d->softstart_ramp_step_size = (float) 100 / d->float_conf.hertz;
 
@@ -260,6 +265,7 @@ static void reset_runtime_vars(Data *d) {
     d->wheelie_entry_armed = true;
     d->wheelie_exiting = false;
     d->wheelie_entering = false;
+    d->cruise_pid_i = 0;
 
     // Set values for startup
     d->setpoint = d->imu.balance_pitch;
@@ -901,6 +907,12 @@ static void refloat_thd(void *arg) {
             d->wheelie_btn_pressed = !VESC_IF->io_read(VESC_PIN_COMM_TX);
         }
 
+        // Read cruise control button on RX pin (active low: pulled high, button pulls to GND)
+        if (d->float_conf.cruise_enabled) {
+            d->cruise_btn_prev = d->cruise_btn_pressed;
+            d->cruise_btn_pressed = !VESC_IF->io_read(VESC_PIN_COMM_RX);
+        }
+
         switch (d->state.state) {
         case (STATE_STARTUP):
             if (VESC_IF->imu_startup_done()) {
@@ -1275,6 +1287,59 @@ static void refloat_thd(void *arg) {
                 engage(d);
                 d->setpoint_target = d->float_conf.wheelie_target_pitch;
                 d->balance_current = d->throttle_current;
+            }
+
+            // Cruise control entry: rising edge of cruise button
+            if (d->float_conf.cruise_enabled && d->cruise_btn_pressed && !d->cruise_btn_prev) {
+                d->cruise_target_speed = d->motor.speed;
+                d->cruise_pid_i = 0;
+                state_cruise(&d->state);
+                break;
+            }
+            break;
+        }
+        case STATE_CRUISE: {
+            // Exit cruise on brake tap
+            if (d->throttle_adc2_mapped > 0.0f) {
+                state_throttle(&d->state);
+                d->throttle_current = 0;
+                break;
+            }
+
+            // Exit cruise on rising edge of cruise button
+            if (d->cruise_btn_pressed && !d->cruise_btn_prev) {
+                state_throttle(&d->state);
+                d->throttle_current = 0;
+                break;
+            }
+
+            // Speed PID: error in km/h, output in amps
+            float cruise_error = d->cruise_target_speed - d->motor.speed;
+            d->cruise_pid_i += cruise_error * d->float_conf.cruise_ki / d->float_conf.hertz;
+
+            // Integral windup clamp: limit to motor current max
+            float i_max = d->motor.current_max;
+            if (d->cruise_pid_i > i_max) {
+                d->cruise_pid_i = i_max;
+            } else if (d->cruise_pid_i < -i_max) {
+                d->cruise_pid_i = -i_max;
+            }
+
+            float cruise_current = cruise_error * d->float_conf.cruise_kp + d->cruise_pid_i;
+
+            // Clamp to motor current max
+            if (cruise_current > d->motor.current_max) {
+                cruise_current = d->motor.current_max;
+            } else if (cruise_current < -d->motor.current_max) {
+                cruise_current = -d->motor.current_max;
+            }
+
+            if (cruise_current < -d->float_conf.throttle_current_deadband) {
+                motor_control_request_brake_current(&d->motor_control, -cruise_current);
+            } else if (cruise_current > d->float_conf.throttle_current_deadband) {
+                motor_control_request_current(&d->motor_control, cruise_current);
+            } else {
+                motor_control_request_current(&d->motor_control, 0.0f);
             }
             break;
         }

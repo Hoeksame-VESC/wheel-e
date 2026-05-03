@@ -323,6 +323,11 @@ typedef struct {
     float wheelie_exit_rate_factor;
     WheelieButtonMode wheelie_button_mode;
     float throttle_current_deadband;
+
+    // Cruise control
+    bool cruise_enabled;
+    float cruise_kp;
+    float cruise_ki;
     float throttle_adc1_voltage_min;
     float throttle_adc1_voltage_center;
     float throttle_adc1_voltage_max;

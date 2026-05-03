@@ -46,6 +46,13 @@ void state_throttle(State *state) {
     state->wheelslip = false;
 }
 
+void state_cruise(State *state) {
+    state->state = STATE_CRUISE;
+    state->sat = SAT_NONE;
+    state->stop_condition = STOP_NONE;
+    state->wheelslip = false;
+}
+
 void state_set_disabled(State *state, bool disabled) {
     if (state->state != STATE_RUNNING && disabled) {
         state->state = STATE_DISABLED;
@@ -95,6 +102,8 @@ uint8_t state_compat(const State *state) {
         return 1;  // RUNNING
     case STATE_THROTTLE:
         return 16;  // THROTTLE (bike normal riding mode)
+    case STATE_CRUISE:
+        return 17;  // CRUISE (bike cruise control mode)
     }
     return 0;  // STARTUP
 }

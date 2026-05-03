@@ -52,6 +52,13 @@ Connect one leg of the button to the **TX pin** and the other leg to **GND**. No
 - **Button open**: pin is pulled high → reads as not pressed
 - **Button closed**: pin is shorted to GND → reads as pressed
 
+### 6. Cruise control
+- Press the cruise button (connected to **RX pin**, active low, same wiring as the wheelie button) to enter cruise at the current speed
+- A PI speed controller maintains that speed by adjusting motor current
+- Press the cruise button again, or touch the brake (any ADC2 input), to exit cruise and return to normal throttle
+- Cruise is only available from `STATE_THROTTLE` — it is impossible to enter cruise while in wheelie mode
+- The feature must be enabled via `cruise_enabled`; the RX pin is not configured when disabled
+
 ---
 
 ## Rationale
@@ -77,6 +84,12 @@ A forced negative exit-brake pulse is not needed: the PID was already applying p
 
 Setting `fault_adc1 = 0` and `fault_adc2 = 0` in config causes `footpad_sensor_update()` to always return `FS_BOTH`, satisfying any remaining footpad checks in `can_engage()` and `check_faults()`, while the raw float values are still available for throttle/brake use.
 
+### Why a separate `STATE_CRUISE` rather than a flag inside `STATE_THROTTLE`
+A dedicated state makes the cruise behaviour explicit and unambiguous in the state machine. It avoids interleaving cruise PI logic with ADC throttle/brake logic in `STATE_THROTTLE`, and it ensures that wheelie entry (which is only checked in `STATE_THROTTLE`) is impossible while cruising. It also makes the motor control layer treat `STATE_CRUISE` consistently alongside `STATE_THROTTLE` for parking brake purposes.
+
+### Why a PI controller (no D term) for cruise
+The derivative term is omitted because `motor.speed` is derived from encoder data and is noisy enough that D amplifies measurement noise into current spikes. The motor's own inertia and the integrator together provide sufficient disturbance rejection for speed holding.
+
 ### Why ADC deadband is voltage-domain with a current-domain cutoff
 Each ADC channel uses a voltage calibration for deadband and range mapping. Voltages at or below `voltage_min` read as 0%; voltages at or above `voltage_max` read as 100%. This makes the deadband boundaries explicit in hardware voltage terms and independent of the current scaling. ADC1 has an additional `voltage_center` point for better throttle control. Set the center higher to have more resolution at low throttle, or lower for a more aggressive throttle response.
 
@@ -87,12 +100,13 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 ## Files Changed
 
 ### `src/state.h`
-- Added `STATE_THROTTLE = 4` to the `RunState` enum
-- Declared `void state_throttle(State *state)`
+- Added `STATE_THROTTLE = 4` and `STATE_CRUISE = 5` to the `RunState` enum
+- Declared `void state_throttle(State *state)` and `void state_cruise(State *state)`
 
 ### `src/state.c`
 - Implemented `state_throttle()`: sets state to `STATE_THROTTLE`, clears `sat`, `stop_condition`, and `wheelslip`
-- Added `case STATE_THROTTLE` to `state_compat()` returning `16` (new compat ID)
+- Implemented `state_cruise()`: sets state to `STATE_CRUISE`, clears `sat`, `stop_condition`, and `wheelslip`
+- Added `case STATE_THROTTLE` → `16` and `case STATE_CRUISE` → `17` to `state_compat()`
 
 ### `src/conf/datatypes.h`
 - Added fields to `RefloatConfig` (before `CfgMeta meta`):
@@ -105,6 +119,9 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 | `wheelie_exit_rate` | `float` | 0 °/s | Rate to ramp setpoint down to 0° on exit; 0 = instant |
 | `wheelie_exit_rate_factor` | `float` | 0 °/s per km/h | Speed-dependent adjustment: effective exit rate = `wheelie_exit_rate + abs(speed_kmh) × factor`; clamped to 0 |
 | `wheelie_button_mode` | `WheelieButtonMode` | None | How the button on TX/SCL interacts with wheelie entry/exit |
+| `cruise_enabled` | `bool` | false | Enables cruise control and configures RX pin as pull-up input |
+| `cruise_kp` | `float` | 2.0 A/(km/h) | Proportional gain for cruise PI controller |
+| `cruise_ki` | `float` | 0.5 A/(km/h·s) | Integral gain for cruise PI controller |
 | `throttle_current_deadband` | `float` | 1.0A | Current commands below this are suppressed to zero |
 | `throttle_adc1_voltage_min` | `float` | 0.5V | ADC1 voltage mapping to 0% current |
 | `throttle_adc1_voltage_center` | `float` | 1.65V | ADC1 voltage mapping to 50% current |
@@ -115,12 +132,20 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 | `throttle_adc2_invert` | `bool` | false | Invert ADC2 so min voltage maps to 100% and max to 0% |
 | `throttle_adc_filter` | `float` | 0.1 | IIR low-pass filter coefficient for raw ADC voltages (0 = off, 0.99 = heavy) |
 
+### `src/conf/conf_default.h`
+- Added `CFG_DFLT_CRUISE_ENABLED` (0), `CFG_DFLT_CRUISE_KP` (2.0), `CFG_DFLT_CRUISE_KI` (0.5)
+
+### `src/conf/confparser.c`
+- Serialization, deserialization, and defaults for `cruise_enabled`, `cruise_kp`, `cruise_ki` (inserted after `wheelie_button_mode`)
+- Config signature bumped by 1 to invalidate stale EEPROM configs
+
 ### `src/conf/settings.xml`
 - Added full parameter definitions for all new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
-- Added a new **Bike** subgroup under the **General** group with two UI separator sections:
+- Added a new **Bike** subgroup under the **General** group with three UI separator sections:
   - **Throttle mode**: `throttle_current_deadband`, `throttle_adc1_voltage_min`, `throttle_adc1_voltage_center`, `throttle_adc1_voltage_max`, `throttle_adc1_invert`, `throttle_adc2_voltage_min`, `throttle_adc2_voltage_max`, `throttle_adc2_invert`, `throttle_adc_filter`
   - **Wheelie mode**: `wheelie_target_pitch`, `wheelie_entry_rate`, `wheelie_entry_rate_factor`, `wheelie_exit_rate`, `wheelie_exit_rate_factor`, `wheelie_button_mode`
+  - **Cruise control**: `cruise_enabled`, `cruise_kp`, `cruise_ki`
 
 ### `src/data.h`
 - Added `float throttle_current` to the `Data` struct — holds the current output in `STATE_THROTTLE`
@@ -133,12 +158,15 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 - Added `float wheelie_exit_step_size` — precomputed degrees-per-iteration from `wheelie_exit_rate` used as a gate for whether exit ramp is active
 - Added `bool wheelie_btn_pressed` — current debounced state of the button on TX pin (true = pressed)
 - Added `bool wheelie_btn_prev` — previous button state, used for rising-edge detection
+- Added `bool cruise_btn_pressed` / `cruise_btn_prev` — state of the cruise button on RX pin
+- Added `float cruise_target_speed` — speed (km/h) captured when cruise was activated
+- Added `float cruise_pid_i` — running integral accumulator for cruise PI controller (amps)
 
 ### `src/rt_data.h`
 - Added `S(throttle_val)` to the `RT_DATA_ITEMS` macro — sends `d->throttle_val` as a realtime data item to the UI
 
 ### `src/motor_control.c`
-- `motor_control_apply()`: `STATE_THROTTLE` is now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
+- `motor_control_apply()`: `STATE_THROTTLE` and `STATE_CRUISE` are now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
 - Added `brake_current_requested` / `requested_brake_current` fields to `MotorControl`
 - Added `motor_control_request_brake_current()`: sets the new fields; `motor_control_apply()` routes these to `VESC_IF->mc_set_brake_current()` (positive value, signed-current path bypassed) so regen never drives the motor in reverse
 
@@ -268,6 +296,22 @@ case STATE_THROTTLE: {
 
 **Current deadband:** Both throttle and brake current commands below `throttle_current_deadband` (default 1A) are suppressed to zero. This prevents residual ADC voltage on an unused input from producing a small but nonzero current command that would keep the motor energized.
 
+#### New `STATE_CRUISE` case
+
+On a rising edge of the cruise button (from `STATE_THROTTLE`), `cruise_target_speed` is set to `motor.speed` (km/h) and the integrator is zeroed. Each loop iteration:
+
+```c
+float cruise_error = d->cruise_target_speed - d->motor.speed;
+d->cruise_pid_i += cruise_error * d->float_conf.cruise_ki / d->float_conf.hertz;
+d->cruise_pid_i = clamp(cruise_pid_i, -current_max, +current_max);
+float cruise_current = cruise_error * d->float_conf.cruise_kp + d->cruise_pid_i;
+cruise_current = clamp(cruise_current, -current_max, +current_max);
+```
+
+Positive output → `motor_control_request_current()`. Negative output → `motor_control_request_brake_current()` (regen, cannot reverse). Near-zero output (within `throttle_current_deadband`) → zero.
+
+Exit conditions checked first each cycle: any brake touch (`adc2_mapped > 0`) or rising edge of cruise button → `state_throttle()`, `throttle_current = 0`.
+
 #### Bumpless transfer on wheelie entry
 
 `engage()` calls `reset_runtime_vars()`, which zeros both `balance_current` and the PID state. Without correction this causes a current step from whatever `throttle_current` was down to 0A the instant the balance loop takes over, producing an immediate deceleration kick.
@@ -275,6 +319,15 @@ case STATE_THROTTLE: {
 The fix seeds `balance_current` from `throttle_current` immediately after `engage()` returns. Because `STATE_RUNNING` integrates `balance_current` with an 0.8/0.2 IIR (`balance_current = balance_current * 0.8 + new_current * 0.2`), starting from the live throttle value gives the PID integral time to wind up to the correct steady-state current before the seed decays. No I-term preload is required — the seeded `balance_current` provides enough continuity.
 
 The PID setpoint itself is not an issue: `reset_runtime_vars()` seeds `setpoint` and `setpoint_target_interpolated` to the **current** pitch, so the first PID error is near zero regardless of how far the target pitch is from the entry pitch. The centering ramp (`SAT_CENTERING`) then moves the setpoint toward `wheelie_target_pitch` at `startup_step_size`.
+
+### `ui.qml.in`
+
+- Added `readonly property int s_Throttle: 4` and `readonly property int s_Cruise: 5` state constants
+- Added `[s_Throttle, "THROTTLE"]` and `[s_Cruise, "CRUISE"]` to `pkgStateToString` — displays the correct label in the state indicator
+- Added `s_Throttle` and `s_Cruise` to the `pkgStateIsError` exclusion list — neither state is treated as a fault
+- Added `["throttle_val", ...]` to the realtime data item map — the combined throttle/brake value (-1 to +1) is plotted in the live data graph
+- Added `throttleGauge`: a dial widget in the HUD that reads `state.rtData["throttle_val"]` and displays throttle/brake percentage on a ±100% dial labelled "throttle"
+- Replaced the onewheel board pitch visualiser with a **bike SVG** (`pitchBikeFramePath`, `pitchBikeForkPath`, `pitchBikeSeatPath`, `pitchBikeWheel1Path`, `pitchBikeWheel2Path`) — the bike shape rotates with pitch in the same canvas, showing front and rear wheels, frame, fork, and seat drawn with inline SVG paths
 
 ### Why wheelie re-entry uses hysteresis
 Without hysteresis, a brief brake tap exits wheelie mode (`STATE_RUNNING` → `STATE_THROTTLE`) but the pitch is still near the entry tolerance. On the very next control loop iteration the entry condition is met again and the bike immediately re-enters wheelie, making it impossible to exit with a short brake press.
@@ -316,6 +369,9 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg → Bike | Throttle ADC Filter (`throttle_adc_filter`) | `0.1` | Low-pass filter strength for raw ADC voltages; 0 = off, higher = smoother but more lag |
 |Refloat Cfg → Startup → Tolerances | Startup Pitch Axis Angle Tolerance (`startup_pitch_tolerance`) | `2–6°` | Smaller = later entry (less time to catch); larger = earlier but may trigger unintentionally |
 |Refloat Cfg → Stop | Pitch Axis Fault Cutoff (`fault_pitch`) | Tune per bike | Must be above wheelie angle to avoid spurious pitch faults during balance |
+|Refloat Cfg → Bike → Cruise control | Enable Cruise Control (`cruise_enabled`) | `true` | Must be on for RX pin to be configured and cruise to be available |
+|Refloat Cfg → Bike → Cruise control | Cruise Control KP (`cruise_kp`) | `2.0` | Start here; increase if speed response is sluggish |
+|Refloat Cfg → Bike → Cruise control | Cruise Control KI (`cruise_ki`) | `0.5` | Start here; increase if steady-state speed error persists on hills |
 
 ---
 
@@ -333,26 +389,25 @@ STARTUP
  └─────────────────────────────────────────────────────────┘
    │
    ▼
-STATE_THROTTLE ◄───────────────────────────────────────────┐
-   │  Brake priority: adc2_mapped > 0 → throttle_val < 0   │
-   │  Current deadband: |current| < deadband → 0           │
-   │                                                       │
-   │  Re-entry blocked until pitch < tolerance             │
-   │  (hysteresis re-arm)                                  │
-   │                                                       │
-   │ pitch ≥ (target − tolerance) AND re-entry armed       │
-   ▼                                                       │
-STATE_RUNNING (wheelie balance loop)                       │
-   │  pitch PID holds wheelie_target_pitch                 │
-   │  Throttle/brake inputs ignored for speed control      │
-   │                                                       │
-   ├── adc2_mapped > 0 ┬─ ramp_time > 0:                   │
-   │                   │   setpoint ramps toward 0°        │
-   │                   │   (balance loop active), exits    │
-   │                   │   at tolerance ──────────────────►│
-   │                   │                                   │
-   │                   └─ ramp_time = 0:                   │
-   │                       instant exit ──────────────────►│
-   │                                                       │
-   └── fault (pitch/roll/temp/voltage) ──► STATE_THROTTLE ─┘
+STATE_THROTTLE ◄─────────────────────────────────────────────────────────────────────┐
+   │  ADC1 = throttle, ADC2 = brake (brake has priority)                             │
+   │  Current deadband: |current| < deadband → 0                                     │
+   │  Re-entry blocked until pitch < tolerance (hysteresis re-arm)                   │
+   │                                                                                 │
+   ├── cruise button pressed ──► STATE_CRUISE                                        │
+   │     (captures motor.speed, zeroes integrator)  │                                │
+   │                                                ├── cruise button pressed ──────►│
+   │                                                └── adc2_mapped > 0 ────────────►│
+   │                                                                                 │
+   │ pitch ≥ (target − tolerance) AND re-entry armed                                 │
+   ▼                                                                                 │
+STATE_RUNNING (wheelie balance loop)                                                 │
+   │  pitch PID holds wheelie_target_pitch                                           │
+   │  Throttle/brake inputs ignored for speed control                                │
+   │                                                                                 │
+   ├── adc2_mapped > 0 ─┬─ ramp_time > 0: setpoint ramps toward 0°                   │
+   │                    │  (balance loop active), exits at tolerance ───────────────►│
+   │                    └─ ramp_time = 0: instant exit ─────────────────────────────►│
+   │                                                                                 │
+   └── fault (pitch/roll/temp/voltage) ─────────────────────────────────────────────►┘
 ```

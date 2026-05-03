@@ -1641,6 +1641,62 @@ p, li { white-space: pre-wrap; }
             <enumNames>Up+Down</enumNames>
             <enumNames>Hold</enumNames>
         </wheelie_button_mode>
+        <cruise_enabled>
+            <longName>Enable Cruise Control</longName>
+            <type>5</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Enable cruise control. A button must be connected to RX/SDA pin (active low). Press to enter cruise at current speed, press again or tap brake to exit.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_CRUISE_ENABLED</cDefine>
+            <valInt>0</valInt>
+        </cruise_enabled>
+        <cruise_kp>
+            <longName>Cruise Control KP</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Proportional gain for cruise control speed PID. Converts km/h speed error into amps of motor current.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_CRUISE_KP</cDefine>
+            <editorDecimalsDouble>2</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>20</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>0.5</stepDouble>
+            <valDouble>2</valDouble>
+            <vTxDoubleScale>100</vTxDoubleScale>
+            <suffix> A/(km/h)</suffix>
+            <vTx>7</vTx>
+        </cruise_kp>
+        <cruise_ki>
+            <longName>Cruise Control KI</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Integral gain for cruise control speed PID. Accumulates over time to eliminate steady-state speed error.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_CRUISE_KI</cDefine>
+            <editorDecimalsDouble>2</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>5</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>0.1</stepDouble>
+            <valDouble>0.5</valDouble>
+            <vTxDoubleScale>1000</vTxDoubleScale>
+            <suffix> A/(km/h·s)</suffix>
+            <vTx>7</vTx>
+        </cruise_ki>
         <throttle_current_deadband>
             <longName>Throttle Current Deadband</longName>
             <type>1</type>
@@ -4278,6 +4334,9 @@ p, li { white-space: pre-wrap; }
         <ser>wheelie_exit_rate</ser>
         <ser>wheelie_exit_rate_factor</ser>
         <ser>wheelie_button_mode</ser>
+        <ser>cruise_enabled</ser>
+        <ser>cruise_kp</ser>
+        <ser>cruise_ki</ser>
         <ser>throttle_current_deadband</ser>
         <ser>throttle_adc1_voltage_min</ser>
         <ser>throttle_adc1_voltage_center</ser>
@@ -4429,6 +4488,10 @@ p, li { white-space: pre-wrap; }
                     <param>wheelie_exit_rate</param>
                     <param>wheelie_exit_rate_factor</param>
                     <param>wheelie_button_mode</param>
+                    <param>::sep::Cruise control</param>
+                    <param>cruise_enabled</param>
+                    <param>cruise_kp</param>
+                    <param>cruise_ki</param>
                 </subgroupParams>
             </subgroup>
             <subgroup>

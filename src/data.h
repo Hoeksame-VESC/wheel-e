@@ -114,6 +114,12 @@ typedef struct {
     bool wheelie_btn_pressed;
     bool wheelie_btn_prev;
 
+    // Cruise control
+    bool cruise_btn_pressed;
+    bool cruise_btn_prev;
+    float cruise_target_speed;
+    float cruise_pid_i;
+
     float setpoint, setpoint_target, setpoint_target_interpolated;
     float noseangling_interpolated;
     time_t alert_timer;
