@@ -317,7 +317,10 @@ typedef struct {
 
     // Bike wheelie mode
     float wheelie_target_pitch;
-    float wheelie_ramp_time;
+    float wheelie_entry_rate;
+    float wheelie_entry_rate_factor;
+    float wheelie_exit_rate;
+    float wheelie_exit_rate_factor;
     WheelieButtonMode wheelie_button_mode;
     float throttle_current_deadband;
     float throttle_adc1_voltage_min;
