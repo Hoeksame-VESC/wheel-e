@@ -36,7 +36,6 @@ typedef enum {
 typedef enum {
     WHEELIE_BTN_NONE = 0,
     WHEELIE_BTN_DOWN,
-    WHEELIE_BTN_UP_DOWN,
     WHEELIE_BTN_HOLD,
 } WheelieButtonMode;
 

@@ -197,7 +197,7 @@ When the brake is pressed (ADC2 mapped > 0), the exit behaviour depends on `whee
 
 **With exit ramp (`wheelie_exit_rate` > 0):** The balance loop stays active but `setpoint_target` is set to 0°. Each loop iteration the effective exit rate is computed as `wheelie_exit_rate + abs(motor.speed) × wheelie_exit_rate_factor` (clamped to ≥ 0), then divided by `hertz` to get the per-iteration step size. Once the interpolated setpoint reaches ≤ `startup_pitch_tolerance`, the state transitions to `STATE_THROTTLE` with a bumpless handover.
 
-On button-triggered entry (Up+Down or Hold modes), `wheelie_entry_rate` and `wheelie_entry_rate_factor` are used instead: the setpoint ramps up from the current pitch to `wheelie_target_pitch` at the computed entry rate.
+On button-triggered entry (Hold mode), `wheelie_entry_rate` and `wheelie_entry_rate_factor` are used instead: the setpoint ramps up from the current pitch to `wheelie_target_pitch` at the computed entry rate.
 
 **Without ramp (rate = 0):** Instant transition.
 
@@ -275,16 +275,32 @@ case STATE_THROTTLE: {
         }
     }
 
-    // Wheelie entry: engage balance loop when pitch approaches the target angle
-    if (d->wheelie_entry_armed &&
-        d->imu.balance_pitch >=
-            (d->float_conf.wheelie_target_pitch - d->float_conf.startup_pitch_tolerance)) {
+    // Wheelie entry: Hold mode triggers immediately on button press (rising edge),
+    // regardless of current pitch. None and Down use pitch-based auto-entry.
+    if (d->wheelie_entry_armed && d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD &&
+        d->wheelie_btn_pressed && !d->wheelie_btn_prev) {
         engage(d);
-        // Set centering target to the wheelie balance point, not 0
         d->setpoint_target = d->float_conf.wheelie_target_pitch;
-        // Bumpless transfer: seed balance_current from the live throttle current so
-        // the motor output does not drop to zero at the moment of handover.
         d->balance_current = d->throttle_current;
+        if (d->float_conf.wheelie_entry_rate > 0.0f) {
+            d->wheelie_entering = true;
+        }
+    } else if (d->wheelie_entry_armed &&
+               (d->float_conf.wheelie_button_mode == WHEELIE_BTN_NONE ||
+                d->float_conf.wheelie_button_mode == WHEELIE_BTN_DOWN) &&
+               d->imu.balance_pitch >= (d->float_conf.wheelie_target_pitch -
+                                        d->float_conf.startup_pitch_tolerance)) {
+        engage(d);
+        d->setpoint_target = d->float_conf.wheelie_target_pitch;
+        d->balance_current = d->throttle_current;
+    }
+
+    // Cruise control entry: rising edge of cruise button
+    if (d->float_conf.cruise_enabled && d->cruise_btn_pressed && !d->cruise_btn_prev) {
+        d->cruise_target_speed = d->motor.speed;
+        d->cruise_pid_i = 0;
+        state_cruise(&d->state);
+        break;
     }
     break;
 }
@@ -303,9 +319,21 @@ On a rising edge of the cruise button (from `STATE_THROTTLE`), `cruise_target_sp
 ```c
 float cruise_error = d->cruise_target_speed - d->motor.speed;
 d->cruise_pid_i += cruise_error * d->float_conf.cruise_ki / d->float_conf.hertz;
-d->cruise_pid_i = clamp(cruise_pid_i, -current_max, +current_max);
+
+float i_max = d->motor.current_max;
+if (d->cruise_pid_i > i_max) {
+    d->cruise_pid_i = i_max;
+} else if (d->cruise_pid_i < -i_max) {
+    d->cruise_pid_i = -i_max;
+}
+
 float cruise_current = cruise_error * d->float_conf.cruise_kp + d->cruise_pid_i;
-cruise_current = clamp(cruise_current, -current_max, +current_max);
+
+if (cruise_current > d->motor.current_max) {
+    cruise_current = d->motor.current_max;
+} else if (cruise_current < -d->motor.current_max) {
+    cruise_current = -d->motor.current_max;
+}
 ```
 
 Positive output → `motor_control_request_current()`. Negative output → `motor_control_request_brake_current()` (regen, cannot reverse). Near-zero output (within `throttle_current_deadband`) → zero.
@@ -357,7 +385,7 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg → Bike | Wheelie Entry Rate Factor (`wheelie_entry_rate_factor`) | `0` | °/s added per km/h of bike speed during entry ramp |
 |Refloat Cfg → Bike | Wheelie Exit Rate (`wheelie_exit_rate`) | `0` or `30-90` | °/s to ramp setpoint down on exit; 0 = instant |
 |Refloat Cfg → Bike | Wheelie Exit Rate Factor (`wheelie_exit_rate_factor`) | `0` | °/s added per km/h of bike speed during exit ramp |
-|Refloat Cfg → Bike | Wheelie Button Mode (`wheelie_button_mode`) | `None` | Button on TX pin: None / Down / Up+Down / Hold |
+|Refloat Cfg → Bike | Wheelie Button Mode (`wheelie_button_mode`) | `None` | Button on TX pin: None / Down / Hold |
 |Refloat Cfg → Bike | Throttle Current Deadband (`throttle_current_deadband`) | `1.0` | Current commands below this (A) are suppressed to zero |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Min (`throttle_adc1_voltage_min`) | `0.5` | ADC1 voltage at 0% throttle; adjust to match hardware rest voltage |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Center (`throttle_adc1_voltage_center`) | `1.65` | ADC1 voltage at 50% current |
@@ -386,28 +414,32 @@ STARTUP
  │    IIR low-pass filter on raw ADC voltages              │
  │    ADC1 → piecewise mapped (min/center/max → 0..1)      │
  │    ADC2 → piecewise mapped (min/max → 0..1)             │
+ │    TX pin read → wheelie_btn (if mode ≠ None)           │
  └─────────────────────────────────────────────────────────┘
    │
    ▼
-STATE_THROTTLE ◄─────────────────────────────────────────────────────────────────────┐
-   │  ADC1 = throttle, ADC2 = brake (brake has priority)                             │
-   │  Current deadband: |current| < deadband → 0                                     │
-   │  Re-entry blocked until pitch < tolerance (hysteresis re-arm)                   │
-   │                                                                                 │
-   ├── cruise button pressed ──► STATE_CRUISE                                        │
-   │     (captures motor.speed, zeroes integrator)  │                                │
-   │                                                ├── cruise button pressed ──────►│
-   │                                                └── adc2_mapped > 0 ────────────►│
-   │                                                                                 │
-   │ pitch ≥ (target − tolerance) AND re-entry armed                                 │
-   ▼                                                                                 │
-STATE_RUNNING (wheelie balance loop)                                                 │
-   │  pitch PID holds wheelie_target_pitch                                           │
-   │  Throttle/brake inputs ignored for speed control                                │
-   │                                                                                 │
-   ├── adc2_mapped > 0 ─┬─ ramp_time > 0: setpoint ramps toward 0°                   │
-   │                    │  (balance loop active), exits at tolerance ───────────────►│
-   │                    └─ ramp_time = 0: instant exit ─────────────────────────────►│
-   │                                                                                 │
-   └── fault (pitch/roll/temp/voltage) ─────────────────────────────────────────────►┘
+STATE_THROTTLE ◄────────────────────────────────────────────────────────────────────┐
+   │  ADC1 = throttle, ADC2 = brake (brake has priority)                            │
+   │  Current deadband: |current| < deadband → 0                                    │
+   │  Re-entry blocked until pitch < tolerance (hysteresis re-arm)                  │
+   │                                                                                │
+   ├── cruise button (RX) pressed ──► STATE_CRUISE ─┐                               │
+   │     (captures motor.speed, zeroes integrator)  │                               │
+   │                                                ├── cruise button pressed ─────►│
+   │                                                └── adc2_mapped > 0 ───────────►│
+   │                                                                                │
+   │ [mode: None / Down]  pitch ≥ (target − tolerance) AND re-entry armed           │
+   │ [mode: Hold]         TX button pressed (rising edge) AND re-entry armed        │
+   ▼                                                                                │
+STATE_RUNNING (wheelie balance loop)                                                │
+   │  pitch PID holds wheelie_target_pitch                                          │
+   │  Throttle/brake inputs ignored for speed control                               │
+   │                                                                                │
+   ├── adc2_mapped > 0 ──────────────────┐                                          │
+   │                                     ├─ ramp > 0: setpoint ramps → 0°           │
+   ├── TX button pressed  [mode: Down]   │  (balance loop active), exits at tol ───►│
+   │   TX button released [mode: Hold] ──┤                                          │
+   │                                     └─ ramp = 0: instant exit ────────────────►│
+   │                                                                                │
+   └── fault (pitch/roll/temp/voltage) ────────────────────────────────────────────►┘
 ```

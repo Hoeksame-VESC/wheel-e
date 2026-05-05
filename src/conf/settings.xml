@@ -1632,13 +1632,11 @@ p, li { white-space: pre-wrap; }
 &lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
 &lt;ul style=&quot;margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 1;&quot;&gt;&lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;None: No button attached, or function turned off&lt;/li&gt;
 &lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Down: Press the button to exit wheelie mode&lt;/li&gt;
-&lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Up+Down: Press the button to enter or exit wheelie mode&lt;/li&gt;
 &lt;li style=&quot;&quot; style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Hold: Press and hold to enter and stay in wheelie. Release to exit&lt;/li&gt;&lt;/ul&gt;&lt;/body&gt;&lt;/html&gt;</description>
             <cDefine>CFG_DFLT_WHEELIE_BUTTON_MODE</cDefine>
             <valInt>0</valInt>
             <enumNames>None</enumNames>
             <enumNames>Down</enumNames>
-            <enumNames>Up+Down</enumNames>
             <enumNames>Hold</enumNames>
         </wheelie_button_mode>
         <cruise_enabled>

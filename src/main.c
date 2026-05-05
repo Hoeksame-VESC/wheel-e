@@ -946,6 +946,9 @@ static void refloat_thd(void *arg) {
                 if (d->state.state == STATE_READY) {
                     state_throttle(&d->state);
                     d->throttle_current = 0;
+                    d->wheelie_entry_armed = false;
+                    d->wheelie_exiting = false;
+                    d->wheelie_entering = false;
                 }
                 motor_control_play_click(&d->motor_control);
                 data_recorder_trigger(&d->data_record, false);
@@ -955,7 +958,7 @@ static void refloat_thd(void *arg) {
             d->enable_upside_down = true;
 
             // Wheelie exit: brake pressed on ADC2 -> begin exit sequence.
-            // If ramp time is configured, gradually lower the setpoint to 0 while
+            // If exit rate is configured, gradually lower the setpoint to 0 while
             // the balance loop keeps running. Otherwise exit instantly.
             if (d->throttle_adc2_mapped > 0.0f && !d->wheelie_exiting) {
                 if (d->wheelie_exit_step_size > 0.0f) {
@@ -974,8 +977,7 @@ static void refloat_thd(void *arg) {
             // Button-triggered wheelie exit
             if (!d->wheelie_exiting) {
                 bool btn_exit = false;
-                if (d->float_conf.wheelie_button_mode == WHEELIE_BTN_DOWN ||
-                    d->float_conf.wheelie_button_mode == WHEELIE_BTN_UP_DOWN) {
+                if (d->float_conf.wheelie_button_mode == WHEELIE_BTN_DOWN) {
                     // Rising edge: button was just pressed
                     btn_exit = d->wheelie_btn_pressed && !d->wheelie_btn_prev;
                 } else if (d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD) {
@@ -1266,12 +1268,9 @@ static void refloat_thd(void *arg) {
                 }
             }
 
-            // Wheelie entry: Up+Down and Hold modes trigger immediately on button press
-            // (rising edge), regardless of current pitch. None and Down use pitch-based
-            // auto-entry as before.
-            if (d->wheelie_entry_armed &&
-                (d->float_conf.wheelie_button_mode == WHEELIE_BTN_UP_DOWN ||
-                 d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD) &&
+            // Wheelie entry: Hold mode triggers immediately on button press (rising edge),
+            // regardless of current pitch. None and Down use pitch-based auto-entry.
+            if (d->wheelie_entry_armed && d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD &&
                 d->wheelie_btn_pressed && !d->wheelie_btn_prev) {
                 engage(d);
                 d->setpoint_target = d->float_conf.wheelie_target_pitch;
