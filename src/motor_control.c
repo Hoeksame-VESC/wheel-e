@@ -41,6 +41,7 @@ void motor_control_configure(MotorControl *mc, const RefloatConfig *config) {
     mc->click_current = config->startup_click_current;
     mc->parking_brake_mode = config->parking_brake_mode;
     mc->main_freq = config->hertz / 2;
+    mc->can_forward_id = config->can_forward_id;
 }
 
 void motor_control_request_current(MotorControl *mc, float current) {
@@ -60,10 +61,22 @@ static inline void reset_tone(MotorControl *mc) {
 }
 
 void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const Time *time) {
+    uint8_t prev_can_forward = mc->can_forward;
+    mc->can_forward = (state == STATE_THROTTLE || state == STATE_CRUISE) ? mc->can_forward_id : 0;
+
+    // When forwarding is disabled, immediately send 0A to secondary VESC instead of waiting
+    // for its safety timeout
+    if (prev_can_forward > 0 && mc->can_forward == 0) {
+        VESC_IF->can_set_current(prev_can_forward, 0.0f);
+    }
+
     if (state == STATE_DISABLED) {
         if (!mc->disabled) {
             // set 0A only once to reset any previously-set current, then stop touching the motor
             VESC_IF->mc_set_current(0.0f);
+            if (mc->can_forward > 0) {
+                VESC_IF->can_set_current(mc->can_forward, 0.0f);
+            }
             mc->disabled = true;
         }
         return;
@@ -106,10 +119,19 @@ void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const
         if (mc->requested_current != 0.0f) {
             // Keep modulation on for 50ms in case we request close-to-0 current
             VESC_IF->mc_set_current_off_delay(0.05f);
+            if (mc->can_forward > 0) {
+                VESC_IF->can_set_current_off_delay(mc->can_forward, 0.0f, 0.05f);
+            }
         }
         VESC_IF->mc_set_current(mc->requested_current);
+        if (mc->can_forward > 0) {
+            VESC_IF->can_set_current(mc->can_forward, mc->requested_current);
+        }
     } else if (mc->brake_current_requested) {
         VESC_IF->mc_set_brake_current(mc->requested_brake_current);
+        if (mc->can_forward > 0) {
+            VESC_IF->can_set_current_brake(mc->can_forward, mc->requested_brake_current);
+        }
     } else {
         // Brake logic
         if (abs_erpm > ERPM_MOVING_THRESHOLD) {
@@ -119,15 +141,24 @@ void motor_control_apply(MotorControl *mc, float abs_erpm, RunState state, const
         if (timer_older(time, mc->brake_timer, 1)) {
             // Release the motor by setting zero current
             VESC_IF->mc_set_current(0.0f);
+            if (mc->can_forward > 0) {
+                VESC_IF->can_set_current(mc->can_forward, 0.0f);
+            }
             return;
         }
 
         if (mc->parking_brake_active && abs_erpm < 2000) {
             // Duty Cycle mode has better holding power (phase-shorting on 6.05)
             VESC_IF->mc_set_duty(0);
+            if (mc->can_forward > 0) {
+                VESC_IF->can_set_duty(mc->can_forward, 0);
+            }
         } else {
             // Use brake current over certain ERPM to avoid MOSFET overcurrent
             VESC_IF->mc_set_brake_current(mc->brake_current);
+            if (mc->can_forward > 0) {
+                VESC_IF->can_set_current_brake(mc->can_forward, mc->brake_current);
+            }
         }
     }
 

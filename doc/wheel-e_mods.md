@@ -59,6 +59,17 @@ Connect one leg of the button to the **TX pin** and the other leg to **GND**. No
 - Cruise is only available from `STATE_THROTTLE` — it is impossible to enter cruise while in wheelie mode
 - The feature must be enabled via `cruise_enabled`; the RX pin is not configured when disabled
 
+### 7. 2WD — CAN forwarding to a second VESC
+- A second VESC (e.g. driving the front wheel) can be driven in parallel by forwarding motor commands over the CAN bus
+- `can_forward_id` sets the CAN controller ID of the slave VESC; setting it to **0 disables forwarding** entirely
+- Commands are forwarded **only in `STATE_THROTTLE` and `STATE_CRUISE`** — not in `STATE_RUNNING` (wheelie balance mode). The front wheel is not driven during a wheelie.
+- When the state transitions out of throttle/cruise (e.g. into wheelie), an explicit `can_set_current(id, 0)` is sent immediately so the slave does not coast at the last commanded current until its own safety timeout fires
+- The following commands are mirrored to the slave:
+  - `can_set_current()` / `can_set_current_off_delay()` — normal traction current
+  - `can_set_current_brake()` — regen braking current
+  - `can_set_duty(0)` — parking brake (phase-shorting)
+- Both VESCs must be on the same CAN bus; set the slave's CAN ID in its own App Cfg
+
 ---
 
 ## Rationale
@@ -131,6 +142,7 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 | `throttle_adc2_voltage_max` | `float` | 3.2V | ADC2 voltage mapping to 100% current |
 | `throttle_adc2_invert` | `bool` | false | Invert ADC2 so min voltage maps to 100% and max to 0% |
 | `throttle_adc_filter` | `float` | 0.1 | IIR low-pass filter coefficient for raw ADC voltages (0 = off, 0.99 = heavy) |
+| `can_forward_id` | `uint8_t` | 0 | CAN ID of the slave VESC to forward motor commands to; 0 = disabled |
 
 ### `src/conf/conf_default.h`
 - Added `CFG_DFLT_CRUISE_ENABLED` (0), `CFG_DFLT_CRUISE_KP` (2.0), `CFG_DFLT_CRUISE_KI` (0.5)
@@ -142,10 +154,11 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 ### `src/conf/settings.xml`
 - Added full parameter definitions for all new fields (type, range, step, unit, description)
 - Added serialization order entries after `remote_throttle_grace_period`
-- Added a new **Bike** subgroup under the **General** group with three UI separator sections:
+- Added a new **Bike** subgroup under the **General** group with four UI separator sections:
   - **Throttle mode**: `throttle_current_deadband`, `throttle_adc1_voltage_min`, `throttle_adc1_voltage_center`, `throttle_adc1_voltage_max`, `throttle_adc1_invert`, `throttle_adc2_voltage_min`, `throttle_adc2_voltage_max`, `throttle_adc2_invert`, `throttle_adc_filter`
   - **Wheelie mode**: `wheelie_target_pitch`, `wheelie_entry_rate`, `wheelie_entry_rate_factor`, `wheelie_exit_rate`, `wheelie_exit_rate_factor`, `wheelie_button_mode`
   - **Cruise control**: `cruise_enabled`, `cruise_kp`, `cruise_ki`
+  - **Slave VESC (2WD)**: `can_forward_id`
 
 ### `src/data.h`
 - Added `float throttle_current` to the `Data` struct — holds the current output in `STATE_THROTTLE`
@@ -165,7 +178,12 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 ### `src/rt_data.h`
 - Added `S(throttle_val)` to the `RT_DATA_ITEMS` macro — sends `d->throttle_val` as a realtime data item to the UI
 
-### `src/motor_control.c`
+### `src/motor_control.h` / `src/motor_control.c`
+- Added `uint8_t can_forward_id` to `MotorControl` — stores the configured CAN ID from config
+- Added `uint8_t can_forward` to `MotorControl` — runtime effective value; set to `can_forward_id` only when state is `STATE_THROTTLE` or `STATE_CRUISE`, otherwise 0
+- `motor_control_configure()` copies `config->can_forward_id` into `mc->can_forward_id`
+- `motor_control_apply()` evaluates state each call and sets `mc->can_forward` accordingly. When the effective ID transitions from non-zero to zero, an explicit `can_set_current(prev_id, 0.0f)` is sent to stop the slave immediately
+- All existing motor command paths check `if (mc->can_forward > 0)` and mirror the same command to the slave via the corresponding `VESC_IF->can_set_*` function
 - `motor_control_apply()`: `STATE_THROTTLE` and `STATE_CRUISE` are now treated alongside `STATE_RUNNING` in the parking brake logic — parking brake is deactivated and current commands are passed through normally
 - Added `brake_current_requested` / `requested_brake_current` fields to `MotorControl`
 - Added `motor_control_request_brake_current()`: sets the new fields; `motor_control_apply()` routes these to `VESC_IF->mc_set_brake_current()` (positive value, signed-current path bypassed) so regen never drives the motor in reverse
@@ -400,6 +418,7 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg → Bike → Cruise control | Enable Cruise Control (`cruise_enabled`) | `true` | Must be on for RX pin to be configured and cruise to be available |
 |Refloat Cfg → Bike → Cruise control | Cruise Control KP (`cruise_kp`) | `2.0` | Start here; increase if speed response is sluggish |
 |Refloat Cfg → Bike → Cruise control | Cruise Control KI (`cruise_ki`) | `0.5` | Start here; increase if steady-state speed error persists on hills |
+|Refloat Cfg → Bike → Slave VESC (2WD) | CAN Forward ID (`can_forward_id`) | `0` | Set to the CAN ID of the slave VESC to enable 2WD forwarding; 0 = disabled |
 
 ---
 

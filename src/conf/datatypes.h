@@ -336,6 +336,9 @@ typedef struct {
     bool throttle_adc2_invert;
     float throttle_adc_filter;
 
+    // CAN motor cmd forwarding
+    uint8_t can_forward_id;
+
     CfgMeta meta;
 } RefloatConfig;
 

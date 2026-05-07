@@ -2039,6 +2039,23 @@ p, li { white-space: pre-wrap; }
             <suffix> A</suffix>
             <vTx>7</vTx>
         </brake_current>
+        <can_forward_id>
+            <longName>CAN Forward ID</longName>
+            <type>2</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;CAN ID of a second VESC to forward motor commands to in Throttle and Cruise modes. Set to 0 to disable forwarding.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_CAN_FORWARD_ID</cDefine>
+            <maxInt>255</maxInt>
+            <minInt>0</minInt>
+            <showDisplay>0</showDisplay>
+            <stepInt>1</stepInt>
+            <valInt>0</valInt>
+            <vTx>1</vTx>
+        </can_forward_id>
         <ki_limit>
             <longName>I Term Limit</longName>
             <type>1</type>
@@ -4353,6 +4370,7 @@ p, li { white-space: pre-wrap; }
         <ser>startup_dirtylandings_enabled</ser>
         <ser>parking_brake_mode</ser>
         <ser>brake_current</ser>
+        <ser>can_forward_id</ser>
         <ser>ki_limit</ser>
         <ser>booster_angle</ser>
         <ser>booster_ramp</ser>
@@ -4490,6 +4508,8 @@ p, li { white-space: pre-wrap; }
                     <param>cruise_enabled</param>
                     <param>cruise_kp</param>
                     <param>cruise_ki</param>
+                    <param>::sep::Slave VESC (2WD)</param>
+                    <param>can_forward_id</param>
                 </subgroupParams>
             </subgroup>
             <subgroup>

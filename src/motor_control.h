@@ -30,6 +30,8 @@ typedef struct {
     float requested_current;
     bool brake_current_requested;
     float requested_brake_current;
+    uint8_t can_forward;
+    uint8_t can_forward_id;
 
     uint8_t click_counter;
     time_t brake_timer;
