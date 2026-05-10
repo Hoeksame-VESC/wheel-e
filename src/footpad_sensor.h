@@ -28,11 +28,15 @@ typedef enum {
 
 typedef struct {
     float adc1, adc2;
+    float adc1_filtered, adc2_filtered;
+    float adc1_mapped, adc2_mapped;
     FootpadSensorState state;
 } FootpadSensor;
 
 void footpad_sensor_init(FootpadSensor *fs);
 
 void footpad_sensor_update(FootpadSensor *fs, const RefloatConfig *config);
+
+void footpad_sensor_filter_and_map(FootpadSensor *fs, const RefloatConfig *config);
 
 int footpad_sensor_state_to_switch_compat(FootpadSensorState v);

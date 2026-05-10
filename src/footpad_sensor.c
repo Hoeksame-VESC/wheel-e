@@ -19,9 +19,15 @@
 
 #include "vesc_c_if.h"
 
+#include <math.h>
+
 void footpad_sensor_init(FootpadSensor *fs) {
     fs->adc1 = 0.0f;
     fs->adc2 = 0.0f;
+    fs->adc1_filtered = 0.0f;
+    fs->adc2_filtered = 0.0f;
+    fs->adc1_mapped = 0.0f;
+    fs->adc2_mapped = 0.0f;
     fs->state = FS_NONE;
 }
 
@@ -56,6 +62,49 @@ void footpad_sensor_update(FootpadSensor *fs, const RefloatConfig *config) {
             if (fs->adc2 > config->fault_adc2) {
                 fs->state = FS_RIGHT;
             }
+        }
+    }
+}
+
+void footpad_sensor_filter_and_map(FootpadSensor *fs, const RefloatConfig *config) {
+    float filter = config->throttle_adc_filter;
+    fs->adc1_filtered = fs->adc1_filtered * filter + fs->adc1 * (1.0f - filter);
+    fs->adc2_filtered = fs->adc2_filtered * filter + fs->adc2 * (1.0f - filter);
+
+    // ADC1: piecewise min/center/max mapping to 0.0–1.0
+    {
+        float v = fs->adc1_filtered;
+        float vmin = config->throttle_adc1_voltage_min;
+        float vctr = config->throttle_adc1_voltage_center;
+        float vmax = config->throttle_adc1_voltage_max;
+        if (v <= vmin) {
+            fs->adc1_mapped = 0.0f;
+        } else if (v <= vctr) {
+            fs->adc1_mapped = 0.5f * (v - vmin) / fmaxf(vctr - vmin, 0.001f);
+        } else if (v <= vmax) {
+            fs->adc1_mapped = 0.5f + 0.5f * (v - vctr) / fmaxf(vmax - vctr, 0.001f);
+        } else {
+            fs->adc1_mapped = 1.0f;
+        }
+        if (config->throttle_adc1_invert) {
+            fs->adc1_mapped = 1.0f - fs->adc1_mapped;
+        }
+    }
+
+    // ADC2: linear min/max mapping to 0.0–1.0
+    {
+        float v = fs->adc2_filtered;
+        float vmin = config->throttle_adc2_voltage_min;
+        float vmax = config->throttle_adc2_voltage_max;
+        if (v <= vmin) {
+            fs->adc2_mapped = 0.0f;
+        } else if (v >= vmax) {
+            fs->adc2_mapped = 1.0f;
+        } else {
+            fs->adc2_mapped = (v - vmin) / fmaxf(vmax - vmin, 0.001f);
+        }
+        if (config->throttle_adc2_invert) {
+            fs->adc2_mapped = 1.0f - fs->adc2_mapped;
         }
     }
 }

@@ -846,56 +846,11 @@ static void refloat_thd(void *arg) {
             d->beep_reason = BEEP_FW_FAULT;
         }
 
-        // Control Loop State Logic
-        // ADC filtering and mapping runs every cycle so mapped values
-        // are available in both STATE_THROTTLE and STATE_RUNNING.
-        {
-            float filter = d->float_conf.throttle_adc_filter;
-            d->throttle_adc1_filtered =
-                d->throttle_adc1_filtered * filter + d->footpad.adc1 * (1.0f - filter);
-            d->throttle_adc2_filtered =
-                d->throttle_adc2_filtered * filter + d->footpad.adc2 * (1.0f - filter);
-
-            // Map filtered voltage to 0.0–1.0 using min/center/max calibration.
-            // min -> 0, center -> 0.5, max -> 1, clamped to [0, 1].
-            {
-                float v = d->throttle_adc1_filtered;
-                float vmin = d->float_conf.throttle_adc1_voltage_min;
-                float vctr = d->float_conf.throttle_adc1_voltage_center;
-                float vmax = d->float_conf.throttle_adc1_voltage_max;
-                if (v <= vmin) {
-                    d->throttle_adc1_mapped = 0.0f;
-                } else if (v <= vctr) {
-                    d->throttle_adc1_mapped = 0.5f * (v - vmin) / fmaxf(vctr - vmin, 0.001f);
-                } else if (v <= vmax) {
-                    d->throttle_adc1_mapped = 0.5f + 0.5f * (v - vctr) / fmaxf(vmax - vctr, 0.001f);
-                } else {
-                    d->throttle_adc1_mapped = 1.0f;
-                }
-                if (d->float_conf.throttle_adc1_invert) {
-                    d->throttle_adc1_mapped = 1.0f - d->throttle_adc1_mapped;
-                }
-            }
-
-            {
-                float v = d->throttle_adc2_filtered;
-                float vmin = d->float_conf.throttle_adc2_voltage_min;
-                float vmax = d->float_conf.throttle_adc2_voltage_max;
-                if (v <= vmin) {
-                    d->throttle_adc2_mapped = 0.0f;
-                } else if (v >= vmax) {
-                    d->throttle_adc2_mapped = 1.0f;
-                } else {
-                    d->throttle_adc2_mapped = (v - vmin) / fmaxf(vmax - vmin, 0.001f);
-                }
-                if (d->float_conf.throttle_adc2_invert) {
-                    d->throttle_adc2_mapped = 1.0f - d->throttle_adc2_mapped;
-                }
-            }
-        }
+        footpad_sensor_filter_and_map(&d->footpad, &d->float_conf);
 
         io_buttons_update(&d->wheelie_btn, &d->cruise_btn, &d->float_conf);
 
+        // Control Loop State Logic
         switch (d->state.state) {
         case (STATE_STARTUP):
             if (VESC_IF->imu_startup_done()) {
@@ -943,7 +898,7 @@ static void refloat_thd(void *arg) {
             // Wheelie exit: brake pressed on ADC2 -> begin exit sequence.
             // If exit rate is configured, gradually lower the setpoint to 0 while
             // the balance loop keeps running. Otherwise exit instantly.
-            if (d->throttle_adc2_mapped > 0.0f && !d->wheelie_exiting) {
+            if (d->footpad.adc2_mapped > 0.0f && !d->wheelie_exiting) {
                 if (d->wheelie_exit_step_size > 0.0f) {
                     // Start ramping the setpoint down to 0
                     d->wheelie_exiting = true;
@@ -1219,10 +1174,10 @@ static void refloat_thd(void *arg) {
             // ADC filtering and mapping is done before the switch.
 
             // Combine into a single -1..1 value: brake wins if non-zero
-            if (d->throttle_adc2_mapped > 0.0f) {
-                d->throttle_val = clampf(-d->throttle_adc2_mapped, -1.0f, 0.0f);
+            if (d->footpad.adc2_mapped > 0.0f) {
+                d->throttle_val = clampf(-d->footpad.adc2_mapped, -1.0f, 0.0f);
             } else {
-                d->throttle_val = clampf(d->throttle_adc1_mapped, 0.0f, 1.0f);
+                d->throttle_val = clampf(d->footpad.adc1_mapped, 0.0f, 1.0f);
             }
             float current = 0.0f;
             if (d->throttle_val < 0) {
@@ -1282,7 +1237,7 @@ static void refloat_thd(void *arg) {
         }
         case STATE_CRUISE: {
             // Exit cruise on brake tap
-            if (d->throttle_adc2_mapped > 0.0f) {
+            if (d->footpad.adc2_mapped > 0.0f) {
                 state_throttle(&d->state);
                 d->throttle_current = 0;
                 break;
