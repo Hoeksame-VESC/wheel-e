@@ -27,6 +27,7 @@
 #include "footpad_sensor.h"
 #include "haptic_feedback.h"
 #include "imu.h"
+#include "io_buttons.h"
 #include "konami.h"
 #include "lcm.h"
 #include "leds.h"
@@ -111,12 +112,10 @@ typedef struct {
     bool wheelie_exiting;
     bool wheelie_entering;
     float wheelie_exit_step_size;
-    bool wheelie_btn_pressed;
-    bool wheelie_btn_prev;
+    IoButton wheelie_btn;
 
     // Cruise control
-    bool cruise_btn_pressed;
-    bool cruise_btn_prev;
+    IoButton cruise_btn;
     float cruise_target_speed;
     float cruise_pid_i;
 

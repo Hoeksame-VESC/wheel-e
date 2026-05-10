@@ -31,6 +31,7 @@
 #include "footpad_sensor.h"
 #include "haptic_feedback.h"
 #include "imu.h"
+#include "io_buttons.h"
 #include "lcm.h"
 #include "leds.h"
 #include "motor_control.h"
@@ -202,15 +203,7 @@ static void configure(Data *d) {
         d->wheelie_exit_step_size = 0.0f;
     }
 
-    // Configure TX pin as digital input with pull-up for wheelie button
-    if (d->float_conf.wheelie_button_mode != WHEELIE_BTN_NONE) {
-        VESC_IF->io_set_mode(VESC_PIN_COMM_TX, VESC_PIN_MODE_INPUT_PULL_UP);
-    }
-
-    // Configure RX pin as digital input with pull-up for cruise control button
-    if (d->float_conf.cruise_enabled) {
-        VESC_IF->io_set_mode(VESC_PIN_COMM_RX, VESC_PIN_MODE_INPUT_PULL_UP);
-    }
+    io_buttons_init(&d->float_conf);
 
     // Feature: Soft Start
     d->softstart_ramp_step_size = (float) 100 / d->float_conf.hertz;
@@ -901,17 +894,7 @@ static void refloat_thd(void *arg) {
             }
         }
 
-        // Read wheelie button on TX pin (active low: pulled high, button pulls to GND)
-        if (d->float_conf.wheelie_button_mode != WHEELIE_BTN_NONE) {
-            d->wheelie_btn_prev = d->wheelie_btn_pressed;
-            d->wheelie_btn_pressed = !VESC_IF->io_read(VESC_PIN_COMM_TX);
-        }
-
-        // Read cruise control button on RX pin (active low: pulled high, button pulls to GND)
-        if (d->float_conf.cruise_enabled) {
-            d->cruise_btn_prev = d->cruise_btn_pressed;
-            d->cruise_btn_pressed = !VESC_IF->io_read(VESC_PIN_COMM_RX);
-        }
+        io_buttons_update(&d->wheelie_btn, &d->cruise_btn, &d->float_conf);
 
         switch (d->state.state) {
         case (STATE_STARTUP):
@@ -979,10 +962,10 @@ static void refloat_thd(void *arg) {
                 bool btn_exit = false;
                 if (d->float_conf.wheelie_button_mode == WHEELIE_BTN_DOWN) {
                     // Rising edge: button was just pressed
-                    btn_exit = d->wheelie_btn_pressed && !d->wheelie_btn_prev;
+                    btn_exit = d->wheelie_btn.pressed && !d->wheelie_btn.prev;
                 } else if (d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD) {
                     // Button released while in wheelie mode
-                    btn_exit = !d->wheelie_btn_pressed;
+                    btn_exit = !d->wheelie_btn.pressed;
                 }
                 if (btn_exit) {
                     if (d->wheelie_exit_step_size > 0.0f) {
@@ -1271,7 +1254,7 @@ static void refloat_thd(void *arg) {
             // Wheelie entry: Hold mode triggers immediately on button press (rising edge),
             // regardless of current pitch. None and Down use pitch-based auto-entry.
             if (d->wheelie_entry_armed && d->float_conf.wheelie_button_mode == WHEELIE_BTN_HOLD &&
-                d->wheelie_btn_pressed && !d->wheelie_btn_prev) {
+                d->wheelie_btn.pressed && !d->wheelie_btn.prev) {
                 engage(d);
                 d->setpoint_target = d->float_conf.wheelie_target_pitch;
                 d->balance_current = d->throttle_current;
@@ -1289,7 +1272,7 @@ static void refloat_thd(void *arg) {
             }
 
             // Cruise control entry: rising edge of cruise button
-            if (d->float_conf.cruise_enabled && d->cruise_btn_pressed && !d->cruise_btn_prev) {
+            if (d->float_conf.cruise_enabled && d->cruise_btn.pressed && !d->cruise_btn.prev) {
                 d->cruise_target_speed = d->motor.speed;
                 d->cruise_pid_i = 0;
                 state_cruise(&d->state);
@@ -1306,7 +1289,7 @@ static void refloat_thd(void *arg) {
             }
 
             // Exit cruise on rising edge of cruise button
-            if (d->cruise_btn_pressed && !d->cruise_btn_prev) {
+            if (d->cruise_btn.pressed && !d->cruise_btn.prev) {
                 state_throttle(&d->state);
                 d->throttle_current = 0;
                 break;
