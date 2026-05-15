@@ -314,19 +314,8 @@ typedef struct {
     CfgLeds leds;
     CfgHardware hardware;
 
-    // Bike wheelie mode
-    float wheelie_target_pitch;
-    float wheelie_entry_rate;
-    float wheelie_entry_rate_factor;
-    float wheelie_exit_rate;
-    float wheelie_exit_rate_factor;
-    WheelieButtonMode wheelie_button_mode;
+    // Bike Throttle mode
     float throttle_current_deadband;
-
-    // Cruise control
-    bool cruise_enabled;
-    float cruise_kp;
-    float cruise_ki;
     float throttle_adc1_voltage_min;
     float throttle_adc1_voltage_center;
     float throttle_adc1_voltage_max;
@@ -335,6 +324,20 @@ typedef struct {
     float throttle_adc2_voltage_max;
     bool throttle_adc2_invert;
     float throttle_adc_filter;
+    float throttle_regen_percent;
+
+    // Bike Wheelie mode
+    float wheelie_target_pitch;
+    float wheelie_entry_rate;
+    float wheelie_entry_rate_factor;
+    float wheelie_exit_rate;
+    float wheelie_exit_rate_factor;
+    WheelieButtonMode wheelie_button_mode;
+
+    // Bike Cruise control
+    bool cruise_enabled;
+    float cruise_kp;
+    float cruise_ki;
 
     // CAN motor cmd forwarding
     uint8_t can_forward_id;

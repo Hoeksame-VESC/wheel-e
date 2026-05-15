@@ -1192,6 +1192,14 @@ static void refloat_thd(void *arg) {
                 motor_control_request_brake_current(&d->motor_control, -current);
             } else if (current > deadband) {
                 motor_control_request_current(&d->motor_control, current);
+            } else if (
+                d->float_conf.throttle_regen_percent > 0 &&
+                d->motor.abs_erpm > 100
+            ) {
+                // Regen brake when throttle is at zero and wheel is still spinning
+                float regen_current = d->motor.current_min *
+                    (d->float_conf.throttle_regen_percent / 100.0f);
+                motor_control_request_brake_current(&d->motor_control, regen_current);
             } else {
                 // We need to request current every cycle to prevent breaking
                 motor_control_request_current(&d->motor_control, 0.0f);
