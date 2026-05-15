@@ -13,7 +13,7 @@ Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The packa
 * VESC with IMU and ADC inputs
 * Motor with hall sensors
 * Analog trottle
-* Analog or digital brake. Preferably wired in "reverse", so that brake on is 0v (failsafe)
+* Analog or digital brake
 * _Optional: Button between TX and GND which can be used to enter and/or exit wheelie mode._
 * _Optional: Button between RX and GND which can be used for cruise control._
 

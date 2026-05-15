@@ -13,7 +13,7 @@ Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The packa
 * VESC with IMU and ADC inputs
 * Motor with hall sensors
 * Analog trottle
-* Analog or digital brake. Preferably wired in "reverse", so that brake on is 0v (failsafe)
+* Analog or digital brake
 * _Optional: Button between TX and GND which can be used to enter and/or exit wheelie mode._
 * _Optional: Button between RX and GND which can be used for cruise control._
 
@@ -30,4 +30,6 @@ Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The packa
 [ReFloat README](ReFloat_README.md) This is the original README for the ReFloat project, which provides an overview of the base code that Wheel-E is built upon. It includes setup instructions, functionality summaries, and documentation links for ReFloat itself.
 
 ## Project status
-As of 30.04.2026: Code for throttle and wheelie mode implemented, including wheelie button support (TX pin) and configurable entry/exit ramp. Compiles and runs. Tested handheld on a VESCed Onewheel Pint by author. Tested to some extent on mini-bikes by other users. More testing and tuning needed.
+As of 15.05.2026: Code tested handheld on a VESCed Onewheel Pint by author. Tested to some extent on mini-bikes by other users. More testing and tuning needed.
+
+Join the project discussion on Discord: [Vescify / Projects / Wheel-E](https://discord.com/channels/846794200308908065/1494378063352561704)
