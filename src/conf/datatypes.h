@@ -324,6 +324,8 @@ typedef struct {
     float throttle_adc2_voltage_max;
     bool throttle_adc2_invert;
     float throttle_adc_filter;
+    float throttle_brake_percent;
+    float throttle_brake_ramp_time;
     float throttle_regen_percent;
 
     // Bike Wheelie mode

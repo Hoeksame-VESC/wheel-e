@@ -92,20 +92,31 @@ void footpad_sensor_filter_and_map(FootpadSensor *fs, const RefloatConfig *confi
     }
 
     // ADC2: linear min/max mapping to 0.0–1.0
+    float _adc2_mapped;
     {
         float v = fs->adc2_filtered;
         float vmin = config->throttle_adc2_voltage_min;
         float vmax = config->throttle_adc2_voltage_max;
         if (v <= vmin) {
-            fs->adc2_mapped = 0.0f;
+            _adc2_mapped = 0.0f;
         } else if (v >= vmax) {
-            fs->adc2_mapped = 1.0f;
+            _adc2_mapped = 1.0f;
         } else {
-            fs->adc2_mapped = (v - vmin) / fmaxf(vmax - vmin, 0.001f);
+            _adc2_mapped = (v - vmin) / fmaxf(vmax - vmin, 0.001f);
         }
         if (config->throttle_adc2_invert) {
-            fs->adc2_mapped = 1.0f - fs->adc2_mapped;
+            _adc2_mapped = 1.0f - _adc2_mapped;
         }
+    }
+
+    // Brake ramp: ramp adc2_mapped up over throttle_brake_ramp_time, instant release.
+    // A ramp_time of 0 means instant apply (no ramp).
+    float brake_target = _adc2_mapped;
+    if (brake_target > fs->adc2_mapped && config->throttle_brake_ramp_time > 0.0f) {
+        float ramp_step = 1.0f / (config->throttle_brake_ramp_time * config->hertz);
+        fs->adc2_mapped = fminf(fs->adc2_mapped + ramp_step, brake_target);
+    } else {
+        fs->adc2_mapped = brake_target;
     }
 }
 

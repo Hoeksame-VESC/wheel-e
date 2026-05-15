@@ -1173,15 +1173,20 @@ static void refloat_thd(void *arg) {
             // Normal two-wheel riding: ADC1 = throttle, ADC2 = brake
             // ADC filtering and mapping is done before the switch.
 
-            // Combine into a single -1..1 value: brake wins if non-zero
+            // Combine into a single -1..1 value: brake wins if non-zero.
+            // adc2_mapped is the ramped brake lever value (see footpad_sensor.c).
             if (d->footpad.adc2_mapped > 0.0f) {
-                d->throttle_val = clampf(-d->footpad.adc2_mapped, -1.0f, 0.0f);
+                d->throttle_val = -d->footpad.adc2_mapped;
             } else {
                 d->throttle_val = clampf(d->footpad.adc1_mapped, 0.0f, 1.0f);
             }
             float current = 0.0f;
             if (d->throttle_val < 0) {
-                current = d->throttle_val * d->motor.current_min;
+                // Only apply brake current while spinning to avoid heating a stationary motor
+                if (d->motor.abs_erpm > 100) {
+                    current = d->throttle_val * (d->float_conf.throttle_brake_percent / 100.0f) *
+                        -d->motor.current_min;
+                }
             } else if (d->throttle_val > 0) {
                 current = d->throttle_val * d->motor.current_max;
             }
@@ -1192,13 +1197,10 @@ static void refloat_thd(void *arg) {
                 motor_control_request_brake_current(&d->motor_control, -current);
             } else if (current > deadband) {
                 motor_control_request_current(&d->motor_control, current);
-            } else if (
-                d->float_conf.throttle_regen_percent > 0 &&
-                d->motor.abs_erpm > 100
-            ) {
+            } else if (d->float_conf.throttle_regen_percent > 0 && d->motor.abs_erpm > 100) {
                 // Regen brake when throttle is at zero and wheel is still spinning
-                float regen_current = d->motor.current_min *
-                    (d->float_conf.throttle_regen_percent / 100.0f);
+                float regen_current =
+                    d->motor.current_min * (d->float_conf.throttle_regen_percent / 100.0f);
                 motor_control_request_brake_current(&d->motor_control, regen_current);
             } else {
                 // We need to request current every cycle to prevent breaking

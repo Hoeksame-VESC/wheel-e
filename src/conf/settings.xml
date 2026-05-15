@@ -1717,6 +1717,50 @@ p, li { white-space: pre-wrap; }
             <suffix> A</suffix>
             <vTx>7</vTx>
         </throttle_current_deadband>
+        <throttle_brake_percent>
+            <longName>Brake Lever Strength</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Maximum brake force as a percentage of the motor&apos;s braking current limit. The lever position is scaled linearly from 0 to this value. Only applied while the wheel is spinning.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_THROTTLE_BRAKE_PERCENT</cDefine>
+            <editorDecimalsDouble>0</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>100</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>5</stepDouble>
+            <valDouble>50</valDouble>
+            <vTxDoubleScale>1</vTxDoubleScale>
+            <suffix> %</suffix>
+            <vTx>7</vTx>
+        </throttle_brake_percent>
+        <throttle_brake_ramp_time>
+            <longName>Brake Lever Ramp Time</longName>
+            <type>1</type>
+            <transmittable>1</transmittable>
+            <description>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Time in seconds to ramp from 0 to maximum brake current when the brake lever is pressed. Useful for digital (on/off) switches. Release is always instant.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+            <cDefine>CFG_DFLT_THROTTLE_BRAKE_RAMP_TIME</cDefine>
+            <editorDecimalsDouble>2</editorDecimalsDouble>
+            <editorScale>1</editorScale>
+            <editAsPercentage>0</editAsPercentage>
+            <maxDouble>5</maxDouble>
+            <minDouble>0</minDouble>
+            <showDisplay>0</showDisplay>
+            <stepDouble>0.05</stepDouble>
+            <valDouble>0.2</valDouble>
+            <vTxDoubleScale>100</vTxDoubleScale>
+            <suffix> s</suffix>
+            <vTx>7</vTx>
+        </throttle_brake_ramp_time>
         <throttle_adc1_voltage_min>
             <longName>Throttle ADC1 Voltage Min</longName>
             <type>1</type>
@@ -2047,7 +2091,7 @@ p, li { white-space: pre-wrap; }
 &lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Roboto'; ; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Percentage of Brake Current to apply as regenerative braking when the throttle is released while the wheel is spinning. Set to 0 to disable.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Percentage of the motor config&apos;s braking current limit (Motor Config &amp;rarr; Current &amp;rarr; Motor Current Brake Max) to apply as regenerative braking when the throttle is released while the wheel is spinning. Set to 0 to disable.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</description>
             <cDefine>CFG_DFLT_THROTTLE_REGEN_PERCENT</cDefine>
             <editorDecimalsDouble>0</editorDecimalsDouble>
             <editorScale>1</editorScale>
@@ -4503,6 +4547,8 @@ p, li { white-space: pre-wrap; }
         <ser>bms.bms_ht_threshold</ser>
         <ser>meta.is_default</ser>
         <ser>throttle_regen_percent</ser>
+        <ser>throttle_brake_percent</ser>
+        <ser>throttle_brake_ramp_time</ser>
     </SerOrder>
     <Grouping>
         <group>
@@ -4512,6 +4558,8 @@ p, li { white-space: pre-wrap; }
                 <subgroupParams>
                     <param>::sep::Throttle mode</param>
                     <param>throttle_current_deadband</param>
+                    <param>throttle_brake_percent</param>
+                    <param>throttle_brake_ramp_time</param>
                     <param>throttle_regen_percent</param>
                     <param>throttle_adc1_voltage_min</param>
                     <param>throttle_adc1_voltage_center</param>

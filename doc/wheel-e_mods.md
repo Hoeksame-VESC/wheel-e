@@ -25,7 +25,26 @@ The bike balances on its **rear wheel only**, with the front wheel lifted (wheel
   - Throttle (ADC1) only contributes when brake is exactly 0
 - `throttle_val` is multiplied by the Motor Cfg max current or brake current to produce a current command
 - A configurable current deadband (`throttle_current_deadband`, default 1A) suppresses commands below the deadband to prevent ADC noise from energizing the motor
+- Brake current is never applied at standstill (`abs_erpm ≤ 100`) to avoid heating the motor with DC current when there is no back-EMF to regenerate
 - `throttle_val` is exposed as a realtime data item for UI display
+
+### 1a. Brake lever feathering (ADC2 ramp)
+- Digital brake levers (on/off switches) produce a step from 0 to 100% the moment they close. To avoid an abrupt current step, the mapped ADC2 value is ramped up over `throttle_brake_ramp_time` seconds
+- The ramp tracks the raw `adc2_mapped` value upward at `1 / (ramp_time × hertz)` per loop tick
+- **Release is always instant**: when the lever is released (`adc2_mapped` drops), `adc2_mapped` follows immediately with no ramp
+- Setting `throttle_brake_ramp_time = 0` disables the ramp (instant apply and release)
+- The ramp is computed inside `footpad_sensor_filter_and_map()` and stored in `FootpadSensor.adc2_mapped`; the instantaneous raw value is kept in a local `_adc2_mapped` variable and is not stored on the struct
+
+### 1b. Brake lever current scaling
+- The brake lever (ADC2) commands a brake current scaled as a percentage of the motor config's **Motor Current Brake Max** (`l_current_min`)
+- `throttle_brake_percent` (0–100 %) sets the maximum brake force at full lever travel; 100 % = full `current_min`
+- Brake current is suppressed to zero at standstill (`abs_erpm ≤ 100`) to avoid wasting battery heating a stationary motor
+
+### 1c. Regen braking on throttle release
+- When the throttle is at zero (within deadband) and the wheel is spinning (`abs_erpm > 100`), a configurable regen current is applied
+- `throttle_regen_percent` (0–100 %) sets the regen strength as a percentage of the motor config's **Motor Current Brake Max** (`l_current_min`)
+- Setting `throttle_regen_percent = 0` disables regen on release entirely (default)
+- While spinning, the brake current regenerates energy back into the battery; at standstill the guard prevents the zero-regen case from applying a holding current
 
 ### 2. Wheelie entry trigger
 - The balance/wheelie loop engages automatically when pitch rises close to `wheelie_target_pitch`. 
@@ -134,6 +153,9 @@ On top of this, a configurable current deadband (`throttle_current_deadband`) su
 | `cruise_kp` | `float` | 2.0 A/(km/h) | Proportional gain for cruise PI controller |
 | `cruise_ki` | `float` | 0.5 A/(km/h·s) | Integral gain for cruise PI controller |
 | `throttle_current_deadband` | `float` | 1.0A | Current commands below this are suppressed to zero |
+| `throttle_brake_percent` | `float` | 50 % | Max brake force from ADC2 lever as % of motor config brake current limit |
+| `throttle_brake_ramp_time` | `float` | 0.2 s | Time to ramp ADC2 from 0 to full when lever is pressed; 0 = instant |
+| `throttle_regen_percent` | `float` | 0 % | Regen brake strength on throttle release as % of motor config brake current limit; 0 = disabled |
 | `throttle_adc1_voltage_min` | `float` | 0.5V | ADC1 voltage mapping to 0% current |
 | `throttle_adc1_voltage_center` | `float` | 1.65V | ADC1 voltage mapping to 50% current |
 | `throttle_adc1_voltage_max` | `float` | 3.2V | ADC1 voltage mapping to 100% current |
@@ -255,22 +277,23 @@ ADC filtering and piecewise min/center/max mapping runs every cycle **before** t
 
 #### New `STATE_THROTTLE` case
 
-The pre-computed mapped values are combined into a single `throttle_val` (-1 to +1) where brake has absolute priority. The final current command is suppressed below a configurable deadband to prevent ADC noise from energizing the motor.
+The pre-computed mapped values are combined into a single `throttle_val` (-1 to +1) where brake has absolute priority. The final current command is suppressed below a configurable deadband to prevent ADC noise from energizing the motor. Brake current is never applied at standstill.
 
 ```c
 case STATE_THROTTLE: {
-    // Normal two-wheel riding: ADC1 = throttle, ADC2 = brake
-    // ADC filtering and mapping is done before the switch.
-
-    // Combine into a single -1..1 value: brake wins if non-zero
-    if (d->throttle_adc2_mapped > 0.0f) {
-        d->throttle_val = clampf(-d->throttle_adc2_mapped, -1.0f, 0.0f);
+    // adc2_mapped is the ramped brake lever value (see footpad_sensor.c).
+    if (d->footpad.adc2_mapped > 0.0f) {
+        d->throttle_val = -d->footpad.adc2_mapped;
     } else {
-        d->throttle_val = clampf(d->throttle_adc1_mapped, 0.0f, 1.0f);
+        d->throttle_val = clampf(d->footpad.adc1_mapped, 0.0f, 1.0f);
     }
     float current = 0.0f;
     if (d->throttle_val < 0) {
-        current = d->throttle_val * d->motor.current_min;
+        // Only apply brake current while spinning to avoid heating a stationary motor
+        if (d->motor.abs_erpm > 100) {
+            current = d->throttle_val *
+                (d->float_conf.throttle_brake_percent / 100.0f) * -d->motor.current_min;
+        }
     } else if (d->throttle_val > 0) {
         current = d->throttle_val * d->motor.current_max;
     }
@@ -280,6 +303,11 @@ case STATE_THROTTLE: {
         motor_control_request_brake_current(&d->motor_control, -current);
     } else if (current > deadband) {
         motor_control_request_current(&d->motor_control, current);
+    } else if (d->float_conf.throttle_regen_percent > 0 && d->motor.abs_erpm > 100) {
+        // Regen brake when throttle is at zero and wheel is still spinning
+        float regen_current =
+            d->motor.current_min * (d->float_conf.throttle_regen_percent / 100.0f);
+        motor_control_request_brake_current(&d->motor_control, regen_current);
     } else {
         motor_control_request_current(&d->motor_control, 0.0f);
     }
@@ -405,6 +433,9 @@ When deploying on a bike, set the following in the VESC Tool UI:
 |Refloat Cfg → Bike | Wheelie Exit Rate Factor (`wheelie_exit_rate_factor`) | `0` | °/s added per km/h of bike speed during exit ramp |
 |Refloat Cfg → Bike | Wheelie Button Mode (`wheelie_button_mode`) | `None` | Button on TX pin: None / Down / Hold |
 |Refloat Cfg → Bike | Throttle Current Deadband (`throttle_current_deadband`) | `1.0` | Current commands below this (A) are suppressed to zero |
+|Refloat Cfg → Bike | Brake Lever Strength (`throttle_brake_percent`) | `50` | Max brake current as % of motor config brake current limit; 100 % = full braking |
+|Refloat Cfg → Bike | Brake Lever Ramp Time (`throttle_brake_ramp_time`) | `0.2` | Seconds to ramp from 0 to max brake on lever press; 0 = instant (useful for analog levers) |
+|Refloat Cfg → Bike | Regen Brake Strength (`throttle_regen_percent`) | `0` | % of motor config brake current limit applied as regen when throttle is released; 0 = disabled |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Min (`throttle_adc1_voltage_min`) | `0.5` | ADC1 voltage at 0% throttle; adjust to match hardware rest voltage |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Center (`throttle_adc1_voltage_center`) | `1.65` | ADC1 voltage at 50% current |
 |Refloat Cfg → Bike | Throttle ADC1 Voltage Max (`throttle_adc1_voltage_max`) | `3.2` | ADC1 voltage at 100% throttle; adjust to match hardware full-scale |
