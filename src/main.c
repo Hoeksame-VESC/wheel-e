@@ -733,6 +733,14 @@ static void calculate_setpoint_target(Data *d) {
         }
     }
 
+    // Wheelie exit takes priority over all tiltback conditions: the exit ramp target of 0
+    // must not be overwritten, otherwise setpoint_target_interpolated never reaches the
+    // startup_pitch_tolerance threshold, the exit completion check never fires, and
+    // wheelie_exiting stays true — which also blocks subsequent adc2 presses.
+    if (d->wheelie_exiting) {
+        d->setpoint_target = 0;
+    }
+
     if (d->state.wheelslip && d->motor.duty_cycle > d->motor.duty_max_with_margin) {
         d->setpoint_target = 0;
     }
