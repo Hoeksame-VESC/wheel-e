@@ -1,5 +1,5 @@
 # Wheel-E - VESC Package
-Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The package is a fork of [ReFloat](ReFloat_README.md) used in self-balancing skateboards.
+Wheel-E is a VESC Package for electric mini-bikes with a wheelie mode. The package is a fork of [ReFloat](https://github.com/lukash/refloat) used in self-balancing skateboards.
 
 ## Functionality summary
 * A "THROTTLE" state used when riding on two wheels. Using ADC1 for throttle and ADC2 for brake.
