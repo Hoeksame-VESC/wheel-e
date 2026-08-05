@@ -1609,7 +1609,7 @@ Item {
         }
 
         function parseCsv(csv) {
-            var lines = csv.split("\r\n");
+            var lines = csv.split("/\r?\n/");
             var tuneCount = lines[0].split(",").length - 1;
 
             var result = [];
