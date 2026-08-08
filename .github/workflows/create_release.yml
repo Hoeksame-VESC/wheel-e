@@ -57,7 +57,7 @@ jobs:
 
       - name: Rename Package File
         run: |
-          mv refloat.vescpkg refloat-${{env.VERSION}}.vescpkg
+          mv wheel-e.vescpkg wheel-e-${{env.VERSION}}.vescpkg
           mv src/package_lib.elf refloat-${{env.VERSION}}.elf
 
       - name: Install Changelog Generation Dependencies
