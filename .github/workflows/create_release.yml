@@ -30,7 +30,15 @@ jobs:
       fi
 
       if [[ "$VERSION" =~ -preview[0-9]+$ ]]; then
-        VERSION="${VERSION%-preview[0-9]*}"
+        VERSION="${VERSION%-preview1}"
+        VERSION="${VERSION%-preview2}"
+        VERSION="${VERSION%-preview3}"
+        VERSION="${VERSION%-preview4}"
+        VERSION="${VERSION%-preview5}"
+        VERSION="${VERSION%-preview6}"
+        VERSION="${VERSION%-preview7}"
+        VERSION="${VERSION%-preview8}"
+        VERSION="${VERSION%-preview9}"
       fi
 
       echo "VERSION=${VERSION}" >> $GITHUB_ENV
