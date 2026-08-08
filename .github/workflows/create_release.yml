@@ -19,42 +19,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract Version
-       run: |
-      TAG="${{github.ref_name}}"
+- name: Extract Version
+        run: |
+          TAG="${{github.ref_name}}"
 
-      if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-        VERSION="${TAG#v}"
-      else
-        VERSION="${TAG}"
-      fi
+          if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            VERSION="${TAG#v}"
+          else
+            VERSION="${TAG}"
+          fi
 
-      if [[ "$VERSION" =~ -preview[0-9]+$ ]]; then
-        VERSION="${VERSION%-preview1}"
-        VERSION="${VERSION%-preview2}"
-        VERSION="${VERSION%-preview3}"
-        VERSION="${VERSION%-preview4}"
-        VERSION="${VERSION%-preview5}"
-        VERSION="${VERSION%-preview6}"
-        VERSION="${VERSION%-preview7}"
-        VERSION="${VERSION%-preview8}"
-        VERSION="${VERSION%-preview9}"
-      fi
+          if [[ "$VERSION" =~ -preview[0-9]+$ ]]; then
+            VERSION="${VERSION%-preview1}"
+            VERSION="${VERSION%-preview2}"
+            VERSION="${VERSION%-preview3}"
+            VERSION="${VERSION%-preview4}"
+            VERSION="${VERSION%-preview5}"
+            VERSION="${VERSION%-preview6}"
+            VERSION="${VERSION%-preview7}"
+            VERSION="${VERSION%-preview8}"
+            VERSION="${VERSION%-preview9}"
+          fi
 
-      echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
-      if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "PRERELEASE=false" >> $GITHUB_ENV
-      else
-        echo "PRERELEASE=true" >> $GITHUB_ENV
-      fi
+          if [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "PRERELEASE=false" >> $GITHUB_ENV
+          else
+            echo "PRERELEASE=true" >> $GITHUB_ENV
+          fi
 
-      if [[ $TAG =~ -preview[0-9]+$ ]]; then
-        echo "PREVIEW=true" >> $GITHUB_ENV
-      else
-        echo "PREVIEW=false" >> $GITHUB_ENV
-      fi
-
+          if [[ $TAG =~ -preview[0-9]+$ ]]; then
+            echo "PREVIEW=true" >> $GITHUB_ENV
+          else
+            echo "PREVIEW=false" >> $GITHUB_ENV
+          fi
 
       - name: Check Tag Matches Version
         run: |
